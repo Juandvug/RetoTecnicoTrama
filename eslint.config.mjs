@@ -117,13 +117,13 @@ const eslintConfig = defineConfig([
   ),
 
   limites(
-    ["src/app/api/**/*.{ts,tsx}"],
+    ["src/app/**/*.{ts,tsx}"],
     [
       OPENAI,
       {
         regex: "^@/server/(?!composition$|http(/|$))",
         message:
-          "Las rutas de API solo usan @/server/composition y @/server/http.",
+          "Las rutas de Next solo usan @/server/composition y @/server/http.",
       },
     ],
   ),

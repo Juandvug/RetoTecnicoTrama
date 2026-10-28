@@ -1,44 +1,21 @@
-import { AppHeader } from "@/components/app-header";
+import { cookies } from "next/headers";
 
-// Esqueleto con contenido de relleno: el chat y el panel reales llegan en F7.
-export default function Home() {
+import { AppHeader } from "@/components/app-header";
+import { InterviewWorkspace } from "@/features/workspace/interview-workspace";
+import { sesionVigente } from "@/server/composition";
+
+// El shell es un Server Component; la entrevista vive en una sola isla cliente
+// (ADR-0001). La página ya se renderiza por request por el nonce de la CSP, así
+// que mirar la cookie acá no cuesta nada y evita mostrar la pantalla de acceso
+// a quien ya tiene sesión.
+export default async function Home() {
+  const conAcceso = sesionVigente(await cookies());
+
   return (
     <>
       <AppHeader />
-      <main className="grid min-h-0 flex-1 grid-cols-1 md:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)] md:divide-x">
-        <section
-          aria-labelledby="titulo-chat"
-          className="flex min-h-0 flex-col bg-sidebar"
-        >
-          <div className="border-b px-6 py-4">
-            <h2 id="titulo-chat" className="text-sm font-semibold">
-              Entrevista
-            </h2>
-          </div>
-          <div className="flex-1 overflow-y-auto px-6 py-4">
-            <div className="rounded-md border bg-muted p-2 text-sm">
-              <p className="mb-1 text-xs font-medium text-muted-foreground">
-                Agente
-              </p>
-              Contame qué decisión querés tomar y con qué datos contás.
-            </div>
-          </div>
-        </section>
-        <section
-          aria-labelledby="titulo-panel"
-          className="flex min-h-0 flex-col bg-background"
-        >
-          <div className="border-b px-6 py-4">
-            <h2 id="titulo-panel" className="text-sm font-semibold">
-              Requerimiento
-            </h2>
-          </div>
-          <div className="flex-1 overflow-y-auto px-6 py-4">
-            <div className="rounded-xl border border-dashed bg-muted p-4 text-sm text-muted-foreground">
-              Todavía no hay requerimiento
-            </div>
-          </div>
-        </section>
+      <main className="flex min-h-0 flex-1 flex-col">
+        <InterviewWorkspace accesoInicial={conAcceso} />
       </main>
     </>
   );
