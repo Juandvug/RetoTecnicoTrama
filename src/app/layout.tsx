@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { headers } from "next/headers";
 
 import { ThemeProvider } from "@/components/theme-provider";
 
@@ -20,7 +21,12 @@ export const metadata: Metadata = {
   description: "Chat de entrada de Trama",
 };
 
-export default function RootLayout({ children }: LayoutProps<"/">) {
+export default async function RootLayout({ children }: LayoutProps<"/">) {
+  // El nonce de la CSP lo genera src/proxy.ts en cada request. Leer las
+  // cabeceras hace que la página se renderice por request, que es lo que la
+  // CSP con nonce necesita (ADR-0005).
+  const nonce = (await headers()).get("x-nonce") ?? undefined;
+
   return (
     // next-themes escribe la clase del tema en <html> antes de hidratar.
     <html
@@ -34,6 +40,7 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           defaultTheme="system"
           enableSystem
           disableTransitionOnChange
+          nonce={nonce}
         >
           {children}
         </ThemeProvider>
