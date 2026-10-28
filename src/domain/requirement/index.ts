@@ -18,3 +18,4 @@ export {
   type DiffRequerimiento,
   type CambiosDeLista,
 } from "./diff";
+export { esquemaJsonDelRequerimiento, type JsonSchema } from "./json-schema";
