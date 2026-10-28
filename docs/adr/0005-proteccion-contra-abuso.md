@@ -50,7 +50,10 @@ Defensa en capas. Dentro del handler se aplican en este orden, y cada capa corta
 - La key vive solo en las variables de entorno de Vercel y nunca lleva el prefijo `NEXT_PUBLIC_`. Los archivos `.env*` están en `.gitignore`, y `.env.example` no tiene valores.
 - Los módulos que leen la key importan `server-only`. Si un componente cliente los importa, el build falla.
 - El logger es estructurado y solo acepta los campos de una lista blanca. Nunca registra cabeceras, variables de entorno ni el contenido de los mensajes. Los errores del SDK se convierten a `LlmError` antes de llegar al log.
-- En la CI se corre `gitleaks` sobre el repo y se escanea `.next/static`. El escaneo falla si encuentra el patrón `sk-` o el nombre `OPENAI_API_KEY`.
+- En la CI se corre `gitleaks` sobre el repo y se escanea `.next/static` (`scripts/scan-bundle.mjs`). El escaneo falla si encuentra:
+  - algo con forma de key: `sk-` o `sk-proj-` seguido de 16 caracteres o más. Buscar `sk-` a secas daría falsos positivos con CSS legítimo como `mask-`;
+  - el nombre `OPENAI_API_KEY`;
+  - el valor de `OPENAI_API_KEY`, `ACCESS_CODE`, `SESSION_SECRET` o `UPSTASH_REDIS_REST_TOKEN`, si está definido al escanear. El informe nombra la variable, nunca el valor.
 
 ### Cabeceras
 

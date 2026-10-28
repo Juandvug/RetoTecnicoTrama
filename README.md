@@ -57,7 +57,14 @@ En `.env.local` hay que completar, como mínimo, el acceso. Sin estas dos variab
 - `ACCESS_CODE`: 8 caracteres o más;
 - `SESSION_SECRET`: 32 bytes o más, por ejemplo con `openssl rand -base64 48`.
 
-Para trabajar sin key de OpenAI, definí `LLM_PROVIDER=fake` y `FAKE_LLM_SCENARIO=ejemplo` (los escenarios están en `tests/fixtures/scenarios`), y la API usa el cliente simulado. Con `LLM_PROVIDER=openai` hacen falta `OPENAI_API_KEY` y `LLM_MODEL`; el adaptador de OpenAI todavía no está. En local el rate limiting usa memoria; Upstash solo es obligatorio en producción. La lista completa de variables está en [ARCHITECTURE.md §11](docs/ARCHITECTURE.md#11-configuración).
+Para trabajar sin key de OpenAI, definí `LLM_PROVIDER=fake` y `FAKE_LLM_SCENARIO=e2e`, y la API usa el cliente simulado con el guion del e2e (los escenarios están en `tests/fixtures/scenarios`). Ese guion responde a cuatro mensajes, en este orden:
+
+1. "Aumentaron los reclamos de clientes y no sé por qué."
+2. "Quiero decidir si refuerzo el soporte telefónico o el chat. Empezó en marzo de 2026." (v1, faltan datos)
+3. "Tenemos una exportación del CRM con canal, fecha y motivo de cada reclamo, y un Excel con los turnos del equipo de soporte." (v2, suficiente)
+4. Con *Ajustar*: "Sumá también el email como canal." (v3)
+
+Cualquier otro mensaje recibe una respuesta genérica, y uno que contenga `falla-una-vez` falla por timeout la primera vez, para probar *Reintentar*. Con `LLM_PROVIDER=openai` hacen falta `OPENAI_API_KEY` y `LLM_MODEL`; el adaptador de OpenAI todavía no está. En local el rate limiting usa memoria; Upstash solo es obligatorio en producción. La lista completa de variables está en [ARCHITECTURE.md §11](docs/ARCHITECTURE.md#11-configuración).
 
 La key de OpenAI va solo en `.env.local` y en las variables de entorno de Vercel. Nunca lleva el prefijo `NEXT_PUBLIC_`, nunca se commitea y nunca se escribe en la documentación.
 
@@ -65,7 +72,8 @@ La key de OpenAI va solo en `.env.local` y en las variables de entorno de Vercel
 |---|---|
 | `pnpm dev` | Servidor de desarrollo |
 | `pnpm test` | Tests unitarios y de integración, sin red (`pnpm test:coverage` agrega la cobertura) |
-| `pnpm test:e2e` | Playwright contra el build, con el LLM simulado *(desde F8)* |
+| `pnpm test:e2e` | Playwright contra el build, con el LLM simulado y axe en claro y oscuro. Hace el build antes; la primera vez, `pnpm exec playwright install chromium` |
+| `pnpm scan:bundle` | Busca secretos en `.next/static` después del build |
 | `pnpm eval` | Evaluaciones de la entrevista con el modelo real, requiere la key *(desde F9)* |
 | `pnpm typecheck`, `pnpm lint`, `pnpm build` | Las verificaciones que corre la CI |
 | `pnpm format` | Formatea el código con Prettier |
