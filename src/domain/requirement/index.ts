@@ -13,3 +13,8 @@ export {
   SIN_DEFINIR,
   type ContratoBase,
 } from "./projection";
+export {
+  diffVersiones,
+  type DiffRequerimiento,
+  type CambiosDeLista,
+} from "./diff";
