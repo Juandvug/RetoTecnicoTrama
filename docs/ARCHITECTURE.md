@@ -814,9 +814,9 @@ Todas las variables se validan con Zod en `src/server/config/env.ts` al arrancar
 
 | Variable | Obligatoria en producción | Uso |
 |---|---|---|
-| `OPENAI_API_KEY` | sí | Adaptador de OpenAI |
+| `OPENAI_API_KEY` | sí | Adaptador de OpenAI. Solo en variables de entorno (`.env.local` y Vercel); nunca en el repo ni en la documentación. La key de prueba tiene 5 USD y vigencia de 7 días |
 | `LLM_PROVIDER` | no (por defecto, `openai`) | `openai` o `fake`. `fake` está prohibido con `VERCEL_ENV=production` |
-| `LLM_MODEL` | sí | Modelo. Se fija cuando se sepa qué modelos habilita la key |
+| `LLM_MODEL` | sí | Modelo. Se fija cuando se sepa qué modelos habilita la key (pregunta 2, pendiente) |
 | `LLM_MAX_OUTPUT_TOKENS` | no | Tope por llamada |
 | `ACCESS_CODE` | sí | Código de acceso |
 | `SESSION_SECRET` | sí (32 bytes o más) | Firma HMAC de la cookie de sesión |
@@ -861,12 +861,17 @@ El log nunca incluye el contenido de los mensajes, el requerimiento, cabeceras n
 | Los turnos que proponen tardan (dos llamadas o más) | Estado "Pensando…" explícito. El streaming de texto queda como incremento sin cambiar el modelo de eventos (ADR-0003). |
 | La guarda de cifras es heurística: puede dar falsos positivos o dejar pasar cifras | Solo bloquea porcentajes y montos. El resto queda como advertencia y se revisa en las evaluaciones. |
 | El JSON del requerimiento puede acercarse al tope de tokens, sobre todo con modelos de razonamiento | Topes por lista (E5). Una respuesta truncada se trata como inválida y se pide una versión más compacta. |
+| La key de prueba tiene solo 5 USD y 7 días de vigencia | Código de acceso, rate limit por sesión, IP y global, y `maxOutputTokens`. Se calibra con los límites del modelo elegido. |
 | Upstash es una dependencia externa | Puerto `RateLimiter` con alternativa en memoria y el tope de gasto de la key como última barrera |
 
-**Preguntas para el canal del reto**
+**Respuestas del canal del reto**
 
-1. ¿Aceptan la forma extendida del contrato (E1–E5), o prefieren recibir solo la forma base? Ya tenemos la proyección.
-2. ¿Qué modelos habilita la key de prueba, y con qué límites de requests y tokens por minuto?
-3. ¿El motor necesita el período en un formato fijo?
-4. ¿Hay convenciones de nombres para clases y predicados en la ontología de Trama?
-5. ¿Les sirve entrar con un código de acceso que les compartimos junto con la URL?
+| # | Pregunta | Respuesta | Efecto en el diseño |
+|---|---|---|---|
+| 1 | ¿Aceptan la forma extendida del contrato (E1–E5), o prefieren solo la base? | Aceptada la forma extendida. La justificación (E1) es lo que interesa: establece cómo se relacionan las distintas bases (fuentes) y cómo interactúan con las reglas. | Se mantienen E1–E5 (§6). La proyección a la forma base (`aContratoBase`) queda como exportación alternativa. |
+| 2 | ¿Qué modelos habilita la key y con qué límites? | Pendiente: no se informaron los modelos ni los límites por minuto. Sí se informó el presupuesto: **5 USD con vigencia de 7 días**. | `LLM_MODEL` sigue sin fijar (§11). Los límites de uso se dimensionan contra ese presupuesto (ADR-0005). |
+| 3 | ¿El motor necesita el período en un formato fijo? | Sí: usar fechas explícitas para no generar ambigüedades. | El período se expresa siempre como `AAAA-MM / AAAA-MM` (§6.1), sin períodos relativos. El prompt ya convierte los relativos usando `fecha_actual` (§10.2). |
+| 4 | ¿Hay convenciones de nombres para clases y predicados? | De acuerdo con las convenciones propuestas. | Se mantienen: clases en PascalCase singular, predicados en camelCase únicos, reglas `R1…`, columnas en snake_case (§10.2). |
+| 5 | ¿Les sirve entrar con un código de acceso junto con la URL? | Sí, y se pide reforzar esa medida de seguridad sobre el link. | Se mantiene el código de acceso con cookie firmada y rate limiting (§7.2, ADR-0005). El presupuesto de 5 USD hace del tope de gasto la última barrera. |
+
+**Pendiente:** conocer los modelos habilitados y sus límites de requests y tokens por minuto, para fijar `LLM_MODEL` y calibrar `RATE_LIMIT_*`. Hasta entonces, la validación estricta del formato del período en el esquema queda como mejora (hoy `periodo` es texto libre y el formato lo guía el prompt).
