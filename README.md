@@ -64,7 +64,7 @@ Para trabajar sin key de OpenAI, definí `LLM_PROVIDER=fake` y `FAKE_LLM_SCENARI
 3. "Tenemos una exportación del CRM con canal, fecha y motivo de cada reclamo, y un Excel con los turnos del equipo de soporte." (v2, suficiente)
 4. Con *Ajustar*: "Sumá también el email como canal." (v3)
 
-Cualquier otro mensaje recibe una respuesta genérica, y uno que contenga `falla-una-vez` falla por timeout la primera vez, para probar *Reintentar*. Con `LLM_PROVIDER=openai` hacen falta `OPENAI_API_KEY` y `LLM_MODEL`; el adaptador de OpenAI todavía no está. En local el rate limiting usa memoria; Upstash solo es obligatorio en producción. La lista completa de variables está en [ARCHITECTURE.md §11](docs/ARCHITECTURE.md#11-configuración).
+Cualquier otro mensaje recibe una respuesta genérica, y uno que contenga `falla-una-vez` falla por timeout la primera vez, para probar *Reintentar*. Con `LLM_PROVIDER=openai` hacen falta `OPENAI_API_KEY` y `LLM_MODEL`. El modelo elegido es `gpt-5-mini` (ver ADR-0002): admite tool calling estricto (comprobado contra la API) y es de la gama económica; latencia, costo y calidad se calibran en F9. En local el rate limiting usa memoria; Upstash solo es obligatorio en producción. La lista completa de variables está en [ARCHITECTURE.md §11](docs/ARCHITECTURE.md#11-configuración).
 
 La key de OpenAI va solo en `.env.local` y en las variables de entorno de Vercel. Nunca lleva el prefijo `NEXT_PUBLIC_`, nunca se commitea y nunca se escribe en la documentación.
 
