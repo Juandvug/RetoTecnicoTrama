@@ -20,7 +20,17 @@ Vive en `src/server/llm/port.ts`. Sus tipos son neutrales y modelan lo que tiene
 
 ```ts
 export interface LlmClient {
-  complete(request: LlmRequest, signal: AbortSignal): Promise<LlmResponse>;
+  complete(
+    request: LlmRequest,
+    signal: AbortSignal,
+    options?: LlmCallOptions,
+  ): Promise<LlmResponse>;
+}
+
+// Lo que no es parte del pedido al modelo. `deadline` es el instante en que
+// vence el plazo del turno: los reintentos no esperan más allá de él.
+export interface LlmCallOptions {
+  deadline?: number;
 }
 
 export type LlmMessage =
@@ -99,8 +109,10 @@ Vive en `src/server/llm/openai/` y es el único módulo que importa `openai`. Tr
 
 Implementan el mismo puerto y se componen en la fábrica:
 
-- `withRetry`: backoff con jitter, respeta `retryable` y `retryAfterMs`.
+- `withRetry`: backoff exponencial con jitter (entre el 50 % y el 100 % de `500 ms × 2^n`), como máximo 2 reintentos, solo para `timeout`, `rate_limited` y `unavailable`. Respeta `retryAfterMs` y no espera más allá de `options.deadline`. Aplica a cada intento un plazo propio de 25 s, de modo que un intento colgado se cancela y se reintenta dentro del plazo del turno. Se detiene de inmediato si el usuario cancela.
 - `withTelemetry`: registra latencia, tokens y tipo de error, nunca contenido.
+
+La señal de cada intento distingue un plazo vencido de una cancelación del usuario por el motivo del abort (`TimeoutError`): el primero es `timeout` y se reintenta; el segundo es `aborted` y no.
 
 ### 4. Fábrica
 
@@ -109,6 +121,8 @@ Implementan el mismo puerto y se componen en la fábrica:
 ### 5. `FakeLlmClient`
 
 Es una implementación programable: recibe un guion de respuestas o una función de la request, y registra cada request para poder hacer aserciones sobre ella. Es la base de los tests y del e2e (ADR-0008).
+
+Cada paso del guion es una respuesta o un error, con una demora opcional (`texto`, `llamada`, `rechazo`, `truncada`, `falla` y `conDemora`). Un guion que se queda corto falla con un `Error` común y no con un `LlmError`, porque es un error del test y no del proveedor. Los escenarios del e2e son archivos JSON en `tests/fixtures/scenarios`, que `FAKE_LLM_SCENARIO` selecciona por nombre.
 
 ### Dirección de las dependencias
 
@@ -144,3 +158,7 @@ El adaptador no conoce `RequerimientoMotor`: recibe un JSON Schema y devuelve ar
   - `500`;
   - timeout.
 - Los tests de la entrevista usan solo `FakeLlmClient`.
+
+### Estado de la implementación
+
+El puerto, el fake, los decoradores y la suite de contrato están implementados. **El `OpenAiLlmClient` y sus respuestas grabadas todavía no** (PLAN F4.5 y F4.6): se agregan al conectar OpenAI. La suite de contrato ya está escrita como una función que recibe una fábrica de clientes (`describeLlmClientContract(nombre, fabrica)`), así que el adaptador solo tiene que aportar la suya. Hasta entonces `createLlmClient` falla con `provider: "openai"`.
