@@ -161,4 +161,10 @@ El adaptador no conoce `RequerimientoMotor`: recibe un JSON Schema y devuelve ar
 
 ### Estado de la implementación
 
-El puerto, el fake, los decoradores y la suite de contrato están implementados. **El `OpenAiLlmClient` y sus respuestas grabadas todavía no** (PLAN F4.5 y F4.6): se agregan al conectar OpenAI. La suite de contrato ya está escrita como una función que recibe una fábrica de clientes (`describeLlmClientContract(nombre, fabrica)`), así que el adaptador solo tiene que aportar la suya. Hasta entonces `createLlmClient` falla con `provider: "openai"`.
+Todo está implementado. El `OpenAiLlmClient` (`src/server/llm/openai/`) pasa la misma suite de contrato que el fake, con el SDK real y respuestas grabadas en `tests/fixtures/openai/`.
+
+Lo que se comprobó contra la API real con `gpt-5-mini` (F9.2):
+
+- Los modelos de razonamiento usan `max_completion_tokens` (que incluye los tokens de razonamiento) y no admiten `temperature`. El adaptador manda `reasoning_effort: "low"` para acotar latencia y costo.
+- El modo estricto acepta `minLength`, `maxLength`, `minItems`, `maxItems` y `pattern` en el esquema del requerimiento. Se conservan: sin ellos el modelo se pasaba del largo máximo de `justifica` y el servidor tenía que reparar. Se quitan solo `$schema` y las palabras clave que no se verificaron.
+- `chat.completions` con `tool_choice` forzado devuelve la tool call en una sola llamada; una propuesta completa tarda en el orden de 15 s con esfuerzo `low` (se mide con evals en F9.4).
