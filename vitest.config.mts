@@ -19,6 +19,10 @@ export default defineConfig({
       provider: "v8",
       include: ["src/**/*.{ts,tsx}"],
       exclude: ["src/**/*.d.ts", "src/components/ui/**"],
+      // PLAN F2: el Validation Engine es el núcleo del reto.
+      thresholds: {
+        "src/domain/requirement/**": { lines: 90 },
+      },
     },
     projects: [
       {
