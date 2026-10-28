@@ -1,9 +1,9 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
-  cacheComponents: true,
-  partialPrefetching: true,
+  // Sin Cache Components: la CSP con nonce exige que la página se renderice en
+  // cada request (ADR-0005). Un shell prerenderizado lleva scripts sin nonce, y
+  // la app es una sola página de cliente que no gana nada con el caché.
   turbopack: {
     rules: {
       "*.css": {
@@ -12,6 +12,7 @@ const nextConfig: NextConfig = {
       },
     },
   },
+  poweredByHeader: false,
 };
 
 export default nextConfig;
