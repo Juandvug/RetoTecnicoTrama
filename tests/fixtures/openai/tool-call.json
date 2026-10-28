@@ -1,0 +1,32 @@
+{
+  "id": "chatcmpl-tool",
+  "object": "chat.completion",
+  "created": 1790000000,
+  "model": "gpt-5-mini-2025-08-07",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "refusal": null,
+        "tool_calls": [
+          {
+            "id": "call_abc123",
+            "type": "function",
+            "function": {
+              "name": "registrar",
+              "arguments": "{\"dato\": \"valor\",  \"extra\":[1,2]}"
+            }
+          }
+        ]
+      },
+      "finish_reason": "tool_calls"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 300,
+    "completion_tokens": 200,
+    "total_tokens": 500
+  }
+}
