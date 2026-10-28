@@ -28,6 +28,8 @@ jobs:
       - run: pnpm lint
       - run: pnpm test:coverage
       - run: pnpm build
+      # ADR-0005: ningún secreto ni el nombre de la key en el bundle del cliente.
+      - run: pnpm scan:bundle
 
   secretos:
     name: Escaneo de secretos
