@@ -35,7 +35,12 @@ export function construirDependencias(
   const logger = crearLogger(sink, clock);
 
   const llm = createLlmClient(
-    { provider: env.llm.provider, scenario: env.llm.scenario },
+    {
+      provider: env.llm.provider,
+      scenario: env.llm.scenario,
+      apiKey: env.llm.apiKey,
+      model: env.llm.model,
+    },
     { telemetria: logger, clock },
   );
 

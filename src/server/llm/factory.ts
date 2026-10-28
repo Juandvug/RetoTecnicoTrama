@@ -2,6 +2,7 @@ import "server-only";
 
 import { FakeLlmClient } from "./fake/client";
 import { cargarEscenario } from "./fake/scenarios";
+import { OpenAiLlmClient } from "./openai/client";
 import type { LlmClient } from "./port";
 import { withRetry, type RetryOptions } from "./retry";
 import { withTelemetry, type Telemetria } from "./telemetry";
@@ -14,12 +15,16 @@ export type LlmEnv = {
   provider: "openai" | "fake";
   /** Nombre del escenario del fake (FAKE_LLM_SCENARIO). */
   scenario?: string | null;
+  apiKey?: string | null;
+  model?: string | null;
 };
 
 export type LlmDeps = {
   telemetria: Telemetria;
   clock?: { now(): number };
   reintentos?: RetryOptions;
+  /** Para los tests: respuestas grabadas sin red. */
+  fetch?: typeof fetch;
 };
 
 export function createLlmClient(env: LlmEnv, deps: LlmDeps): LlmClient {
@@ -31,8 +36,14 @@ export function createLlmClient(env: LlmEnv, deps: LlmDeps): LlmClient {
     }
     base = new FakeLlmClient(cargarEscenario(env.scenario));
   } else {
-    // El adaptador real se agrega en el paso de conexión con OpenAI (PLAN F4.5).
-    throw new Error("El adaptador de OpenAI todavía no está disponible.");
+    if (!env.apiKey)
+      throw new Error("LLM_PROVIDER=openai requiere OPENAI_API_KEY.");
+    if (!env.model) throw new Error("LLM_PROVIDER=openai requiere LLM_MODEL.");
+    base = new OpenAiLlmClient({
+      apiKey: env.apiKey,
+      model: env.model,
+      fetch: deps.fetch,
+    });
   }
 
   // La telemetría mide cada intento; el reintento envuelve a la telemetría.

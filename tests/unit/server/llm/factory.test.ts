@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import { createLlmClient } from "@/server/llm/factory";
 import { unRequest } from "@tests/contract/llm-client.contract";
+import { fetchGrabado, RESPUESTAS } from "@tests/fixtures/openai/fetch";
 
 const señal = () => new AbortController().signal;
 
@@ -39,12 +40,35 @@ describe("createLlmClient", () => {
     ).toThrow(/No existe el escenario/);
   });
 
-  it("todavía no tiene el adaptador de OpenAI", () => {
+  it("compone el adaptador de OpenAI con sus decoradores", async () => {
+    const eventos: unknown[] = [];
+    const { fetch } = fetchGrabado(200, RESPUESTAS.texto);
+    const cliente = createLlmClient(
+      {
+        provider: "openai",
+        apiKey: "clave-de-prueba",
+        model: "modelo-de-prueba",
+      },
+      { telemetria: { registrar: (e) => eventos.push(e) }, fetch },
+    );
+
+    const respuesta = await cliente.complete(unRequest(), señal());
+
+    expect(respuesta.text).toBe("¿Qué decisión querés tomar?");
+    expect(eventos).toEqual([
+      expect.objectContaining({ evento: "llm", resultado: "ok" }),
+    ]);
+  });
+
+  it.each([
+    ["la clave", { model: "m" }, /OPENAI_API_KEY/],
+    ["el modelo", { apiKey: "k" }, /LLM_MODEL/],
+  ])("con openai exige %s", (_, env, mensaje) => {
     expect(() =>
       createLlmClient(
-        { provider: "openai" },
+        { provider: "openai", ...env },
         { telemetria: { registrar: () => {} } },
       ),
-    ).toThrow(/OpenAI todavía no está disponible/);
+    ).toThrow(mensaje);
   });
 });
