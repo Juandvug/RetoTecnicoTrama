@@ -21,6 +21,7 @@ Defensa en capas. Dentro del handler se aplican en este orden, y cada capa corta
 
 3. **Código de acceso.** Una pantalla inicial pide un código compartido (`ACCESS_CODE`).
    - `POST /api/access` compara el código en tiempo constante.
+   - La página mira la cookie al renderizar: con una sesión válida no muestra la pantalla del código. Si un turno recibe 401 (la cookie venció), la pantalla vuelve a aparecer, el mensaje queda pendiente y se reintenta solo con el mismo `turnId` al entrar.
    - Si es correcto, emite una cookie de sesión `HttpOnly`, `Secure` y `SameSite=Strict`, firmada con HMAC-SHA256 (`SESSION_SECRET`), que contiene un id de sesión aleatorio y vence a las 24 h. `Secure` solo se omite con `NODE_ENV=development`, porque `localhost` se sirve por HTTP.
    - Los intentos se limitan a 5 cada 10 minutos por IP. Cuentan todos, también los correctos: así el sexto intento seguido recibe 429 aunque traiga el código, y no hay forma de distinguir por la respuesta si el bloqueo cayó sobre un código bueno.
    - La validación de entorno falla si falta `ACCESS_CODE` o `SESSION_SECRET`, **en cualquier entorno** y no solo en producción, así que el control de acceso no puede quedar apagado por olvido. `ACCESS_CODE` tiene al menos 8 caracteres y `SESSION_SECRET`, al menos 32 bytes. Con la configuración inválida, la API responde 503 sin decir qué falta; el log del servidor nombra las variables, nunca sus valores.
