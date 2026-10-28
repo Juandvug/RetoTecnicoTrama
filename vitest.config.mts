@@ -21,6 +21,9 @@ export default defineConfig({
       exclude: ["src/**/*.d.ts", "src/components/ui/**"],
       // PLAN F2: el Validation Engine es el núcleo del reto.
       thresholds: {
+        // ADR-0008: al menos 80 % de líneas en el dominio y el servidor.
+        "src/domain/**": { lines: 80 },
+        "src/server/**": { lines: 80 },
         "src/domain/requirement/**": { lines: 90 },
       },
     },
