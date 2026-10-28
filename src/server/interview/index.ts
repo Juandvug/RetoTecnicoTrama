@@ -4,6 +4,7 @@ import "server-only";
 export { runTurn, type GuardaDeCifras, type TurnoResultado } from "./engine";
 export {
   CONFIG_POR_DEFECTO,
+  type CampoDeLog,
   type Clock,
   type InterviewConfig,
   type InterviewDeps,
