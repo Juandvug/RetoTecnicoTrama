@@ -60,7 +60,7 @@ Los aplica el decorador `withRetry` sobre el puerto.
 - **Errores reintentables:** `timeout`, `rate_limited` y `unavailable`. **No se reintentan:** `quota_exceeded`, `auth`, `bad_request` y `aborted`.
 - **Cantidad:** hasta 2 reintentos por llamada, con backoff exponencial y jitter (base de 500 ms). `retryAfterMs` solo se respeta si cabe en el plazo que queda.
 - **Plazos:** 25 s por llamada y 50 s por turno. El `maxDuration` del handler es de 60 s.
-- **Cancelación:** cada llamada recibe `AbortSignal.any([request.signal, timeout(min(porLlamada, restante))])`. Si el usuario cierra la pestaña, la llamada en curso se cancela.
+- **Cancelación:** el engine combina la señal del request con el plazo del turno (50 s) y pasa a cada llamada esa señal y el `deadline` del turno. `withRetry` agrega el plazo de 25 s de cada intento, así un intento colgado se cancela y se reintenta sin consumir el plazo de los demás (ADR-0002). Si el usuario cierra la pestaña, la llamada en curso se cancela. Los temporizadores usan `setTimeout`, para que los tests los controlen con timers simulados.
 - **Presupuesto por turno:** como máximo 5 llamadas al modelo, sumando reparaciones, la corrección de cifras y la llamada de cierre. Los reintentos de transporte no cuentan aquí: tienen su propio tope.
 
 ### Errores hacia el cliente
