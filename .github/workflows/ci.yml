@@ -32,6 +32,10 @@ jobs:
   secretos:
     name: Escaneo de secretos
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      # La acción lista los commits del PR para escanear solo esos.
+      pull-requests: read
     steps:
       - uses: actions/checkout@v5
         with:
