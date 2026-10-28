@@ -48,7 +48,7 @@ El sistema puede bajar la completitud, pero nunca subirla. Cuando la baja, el mo
 
 `detectarCifras(texto, corpusUsuario)` busca porcentajes y montos que no aparezcan en los mensajes del usuario. Se aplica en dos lugares:
 
-- **En los campos de texto del requerimiento**, como invariante (`CIFRA_NO_APORTADA`, error bloqueante que se repara).
+- **En los campos de texto del requerimiento**, como invariante (`CIFRA_NO_APORTADA`, error bloqueante que se repara). Un umbral que el modelo propone como supuesto y declara en `preguntas_abiertas` no es un error; la regla por campo está en [ARCHITECTURE.md §6.3](../ARCHITECTURE.md#63-invariantes-semánticas).
 - **En el mensaje al usuario**, antes de devolverlo. Si encuentra una cifra, se pide una corrección (una sola vez). Si la cifra sigue apareciendo, el mensaje se reemplaza por el texto de respaldo.
 
 Los demás números que el usuario no aportó, como el umbral de una regla, solo generan una advertencia. Así se evitan falsos positivos con identificadores como `R1` o con números de versión.
