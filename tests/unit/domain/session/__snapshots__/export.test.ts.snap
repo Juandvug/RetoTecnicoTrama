@@ -1,0 +1,30 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`exportarTranscripcion > coincide con el snapshot de una sesión confirmada 1`] = `
+"# Transcripción de la entrevista
+
+## Vos · 2026-10-28T10:00:00.000Z
+
+> Aumentaron las renuncias en operaciones.
+
+## Agente · 2026-10-28T10:00:00.000Z
+
+> Respuesta del agente
+
+_Registró la versión v1 · Faltan datos._
+
+## Vos · 2026-10-28T10:00:00.000Z
+
+> Desde febrero de 2026.
+
+## Agente · 2026-10-28T10:00:00.000Z
+
+> Respuesta del agente
+
+_Registró la versión v2 · Suficiente para confirmar._
+
+---
+
+**Confirmada la versión v2** · 2026-10-28T10:00:00.000Z
+"
+`;
