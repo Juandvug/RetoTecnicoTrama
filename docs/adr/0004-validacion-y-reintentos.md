@@ -75,6 +75,8 @@ Los aplica el decorador `withRetry` sobre el puerto.
 | `timeout` del modelo o plazo del turno agotado | 504 | `LLM_TIMEOUT` | sí |
 | `rate_limited` o `unavailable` del modelo | 503 / 502 | `LLM_UNAVAILABLE` | sí |
 | `quota_exceeded` o `auth` | 503 | `SERVICE_UNAVAILABLE` | no |
+| `aborted` (el cliente cerró la conexión) | 499 | `INTERNAL` | sí. Nadie lee la respuesta, pero queda en el log. |
+| Configuración del servidor inválida | 503 | `SERVICE_UNAVAILABLE` | no |
 | Cualquier otro | 500 | `INTERNAL` | no |
 
 El cuerpo de error es `{ error: { code, message, retryable, retryAfterSec? } }`, con el mensaje en español y sin detalles internos. Que el modelo se niegue a responder (`refusal`) no es un error HTTP: el turno responde 200 con un mensaje neutro y sin propuesta.
