@@ -10,6 +10,10 @@ import { conAlternativa } from "@/server/security/rate-limit/fallback";
 import { crearLimitadorEnMemoria } from "@/server/security/rate-limit/memory";
 import { reglasDeLimite } from "@/server/security/rate-limit/port";
 import { crearLimitadorUpstash } from "@/server/security/rate-limit/upstash";
+import {
+  NOMBRE_COOKIE,
+  verificarSesion,
+} from "@/server/security/session-cookie";
 
 // Raíz de composición del servidor: de las variables de entorno a las
 // dependencias de cada handler. Es el único lugar que conoce las
@@ -94,4 +98,23 @@ export function obtenerDependencias(): ResultadoDeComposicion {
     memo = { ok: false };
   }
   return memo;
+}
+
+/**
+ * Para la página: si la cookie de sesión es válida, se salta la pantalla del
+ * código de acceso. Con la configuración inválida, siempre false.
+ */
+export function sesionVigente(cookies: {
+  get(nombre: string): { value: string } | undefined;
+}): boolean {
+  const composicion = obtenerDependencias();
+  if (!composicion.ok) return false;
+  const { secretoDeSesion, clock } = composicion.deps.acceso;
+  return (
+    verificarSesion(
+      cookies.get(NOMBRE_COOKIE)?.value,
+      secretoDeSesion,
+      clock.now(),
+    ) !== null
+  );
 }
