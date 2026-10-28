@@ -1,0 +1,239 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`JSON Schema de registrar_requerimiento > coincide con el snapshot 1`] = `
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "additionalProperties": false,
+  "properties": {
+    "alcance": {
+      "additionalProperties": false,
+      "properties": {
+        "periodo": {
+          "anyOf": [
+            {
+              "maxLength": 500,
+              "minLength": 1,
+              "type": "string",
+            },
+            {
+              "type": "null",
+            },
+          ],
+        },
+        "unidades": {
+          "items": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string",
+          },
+          "maxItems": 8,
+          "type": "array",
+        },
+      },
+      "required": [
+        "periodo",
+        "unidades",
+      ],
+      "type": "object",
+    },
+    "completitud": {
+      "enum": [
+        "suficiente_para_confirmar",
+        "faltan_datos",
+      ],
+      "type": "string",
+    },
+    "decision_objetivo": {
+      "anyOf": [
+        {
+          "maxLength": 500,
+          "minLength": 1,
+          "type": "string",
+        },
+        {
+          "type": "null",
+        },
+      ],
+    },
+    "esquema": {
+      "additionalProperties": false,
+      "properties": {
+        "clases": {
+          "items": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string",
+          },
+          "maxItems": 12,
+          "minItems": 1,
+          "type": "array",
+        },
+        "relaciones": {
+          "items": {
+            "additionalProperties": false,
+            "properties": {
+              "objeto": {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string",
+              },
+              "predicado": {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string",
+              },
+              "sujeto": {
+                "maxLength": 64,
+                "minLength": 1,
+                "type": "string",
+              },
+            },
+            "required": [
+              "sujeto",
+              "predicado",
+              "objeto",
+            ],
+            "type": "object",
+          },
+          "maxItems": 16,
+          "type": "array",
+        },
+      },
+      "required": [
+        "clases",
+        "relaciones",
+      ],
+      "type": "object",
+    },
+    "fuentes_requeridas": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "columnas_minimas": {
+            "items": {
+              "additionalProperties": false,
+              "properties": {
+                "justifica": {
+                  "items": {
+                    "maxLength": 64,
+                    "minLength": 1,
+                    "type": "string",
+                  },
+                  "maxItems": 6,
+                  "minItems": 1,
+                  "type": "array",
+                },
+                "nombre": {
+                  "maxLength": 64,
+                  "minLength": 1,
+                  "type": "string",
+                },
+              },
+              "required": [
+                "nombre",
+                "justifica",
+              ],
+              "type": "object",
+            },
+            "maxItems": 15,
+            "minItems": 1,
+            "type": "array",
+          },
+          "justifica": {
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string",
+            },
+            "maxItems": 6,
+            "minItems": 1,
+            "type": "array",
+          },
+          "nombre": {
+            "maxLength": 64,
+            "minLength": 1,
+            "type": "string",
+          },
+          "tipo": {
+            "enum": [
+              "excel",
+              "csv",
+              "pdf",
+              "crm-export",
+            ],
+            "type": "string",
+          },
+        },
+        "required": [
+          "nombre",
+          "tipo",
+          "columnas_minimas",
+          "justifica",
+        ],
+        "type": "object",
+      },
+      "maxItems": 6,
+      "type": "array",
+    },
+    "necesidad": {
+      "maxLength": 500,
+      "minLength": 1,
+      "type": "string",
+    },
+    "preguntas_abiertas": {
+      "items": {
+        "maxLength": 500,
+        "minLength": 1,
+        "type": "string",
+      },
+      "maxItems": 6,
+      "type": "array",
+    },
+    "reglas_candidatas": {
+      "items": {
+        "additionalProperties": false,
+        "properties": {
+          "enunciado": {
+            "maxLength": 500,
+            "minLength": 1,
+            "type": "string",
+          },
+          "id": {
+            "pattern": "^R[1-9]\\d?$",
+            "type": "string",
+          },
+          "usa": {
+            "items": {
+              "maxLength": 64,
+              "minLength": 1,
+              "type": "string",
+            },
+            "maxItems": 8,
+            "minItems": 1,
+            "type": "array",
+          },
+        },
+        "required": [
+          "id",
+          "enunciado",
+          "usa",
+        ],
+        "type": "object",
+      },
+      "maxItems": 8,
+      "type": "array",
+    },
+  },
+  "required": [
+    "necesidad",
+    "decision_objetivo",
+    "alcance",
+    "esquema",
+    "reglas_candidatas",
+    "fuentes_requeridas",
+    "preguntas_abiertas",
+    "completitud",
+  ],
+  "type": "object",
+}
+`;
