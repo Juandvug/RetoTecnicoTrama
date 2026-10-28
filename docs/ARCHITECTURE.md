@@ -172,6 +172,7 @@ type TurnoResultado = {
     reparaciones: number;
     guardaCifras: "ok" | "corregido" | "respaldo";
   };
+  uso: { tokensEntrada: number; tokensSalida: number }; // para el log; no viaja al cliente
 };
 ```
 
@@ -499,6 +500,7 @@ export const TurnoResponseSchema = z.strictObject({
     promptVersion: z.string(),
     llamadas: z.int(),
     reparaciones: z.int(),
+    guardaCifras: z.enum(["ok", "corregido", "respaldo"]),
   }),
 });
 
@@ -761,7 +763,7 @@ Trama traduce la necesidad a un modelo formal (clases y relaciones), carga los d
 
 ## Cómo usar registrar_requerimiento
 - Enviá siempre el requerimiento completo. Cada llamada crea una versión nueva que reemplaza a la vigente.
-- Convenciones: clases en singular y en PascalCase (OrdenDeCompra); predicados en camelCase y únicos en el esquema (asignadoA); reglas con id R1, R2…; columnas en snake_case.
+- Convenciones: clases en singular y en PascalCase (EntidadA); predicados en camelCase y únicos en el esquema (relacionadaCon); reglas con id R1, R2…; columnas en snake_case.
 - En el justifica de cada columna, citá la clase o el predicado que esa columna alimenta y, si corresponde, la regla que la necesita. En el justifica de cada fuente, citá los elementos que la justifican.
 - En el usa de cada regla, listá las clases y los predicados que la regla necesita.
 - Si todavía no sabés la decisión o el período, usá null; no los completes con suposiciones. Si el usuario da un período relativo ("hace 8 meses"), expresalo como AAAA-MM / AAAA-MM a partir de la fecha_actual del contexto.
@@ -792,7 +794,9 @@ observaciones:
 </contexto_del_turno>
 ```
 
-Si el texto del usuario contiene `<contexto_del_turno` o `</contexto_del_turno>`, esos delimitadores se escapan antes de enviarlo. Así el usuario no puede hacerse pasar por el sistema.
+Si el texto del usuario contiene `<contexto_del_turno` o `</contexto_del_turno>`, esos delimitadores se escapan antes de enviarlo. Así el usuario no puede hacerse pasar por el sistema. Se escapan en todos los mensajes del historial (también los del asistente, que manda el cliente) y en todo lo que entra al bloque y deriva de ellos: el requerimiento vigente, los motivos y las observaciones.
+
+En la llamada que corrige una cifra (guarda de cifras, §10.4), el bloque lleva además una línea `correccion:` con la instrucción. El borrador con la cifra no se agrega a la conversación.
 
 ### 10.4 Salvaguardas
 
@@ -803,7 +807,7 @@ Si el texto del usuario contiene `<contexto_del_turno` o `</contexto_del_turno>`
 | Pedir de más | "Pedí lo mínimo" | Topes por lista (E5) y la advertencia `ELEMENTO_HUERFANO` |
 | Declararse suficiente sin serlo | Criterio explícito de suficiencia | Completitud efectiva: el sistema solo puede bajarla, nunca subirla (§6.4) |
 | Entrevista interminable | Máximo dos preguntas por turno | Propuesta forzada en el tercer mensaje y cierre forzado en `pedir` (§9) |
-| Sesgo hacia un dominio | Sin ejemplos de dominio | Ningún enum ni lista de dominio en `src/`. Una guarda de agnosticismo comprueba que el vocabulario de los fixtures no aparece en el prompt ni en `src/`. |
+| Sesgo hacia un dominio | Sin ejemplos de dominio | Ningún enum ni lista de dominio en `src/`. Una guarda de agnosticismo comprueba que los identificadores de los fixtures (clases, predicados, columnas y fuentes) no aparecen en el prompt ni en `src/`. Los compuestos (`empleado_id`, `asignadoA`) se buscan sin distinguir mayúsculas; los de una palabra, con su mayúscula, para no confundir la clase `Turno` con el turno de la conversación. Los de una sola palabra en minúscula (`fecha`) no se distinguen de la prosa y quedan fuera. |
 | Inyección de prompt o uso fuera de tema | Regla de alcance | El contexto viaja solo con rol `system`, se escapan los delimitadores, la tool no tiene efectos laterales y hay límites de tamaño y de turnos (ADR-0005) |
 | Filtración del prompt | — | El prompt no contiene secretos; que se filtre es un riesgo aceptado |
 | Respuestas demasiado largas | "Mensajes cortos" | `maxOutputTokens` por llamada |
