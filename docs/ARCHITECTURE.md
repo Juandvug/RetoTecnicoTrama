@@ -126,9 +126,11 @@ validarArgumentos(argumentos: string, corpusUsuario: string[]):
   | { ok: true; requerimiento: RequerimientoMotor; analisis: Analisis }
   | { ok: false; errores: Observacion[] };
 
-analizarRequerimiento(req: RequerimientoMotor, corpusUsuario: string[]): Analisis;
+// verificarCifras: false al revalidar la versión vigente del cliente (§7.3, paso 6).
+analizarRequerimiento(req: RequerimientoMotor, corpusUsuario: string[], opciones?: { verificarCifras?: boolean }): Analisis;
 detectarCifras(texto: string, corpusUsuario: string[]): CifraDetectada[];
-aContratoBase(req: RequerimientoMotor): ContratoBase;
+// completitud: la efectiva de la versión, si difiere de la declarada.
+aContratoBase(req: RequerimientoMotor, completitud?: Completitud): ContratoBase;
 diffVersiones(anterior: RequerimientoMotor, actual: RequerimientoMotor): DiffRequerimiento;
 ```
 
@@ -234,7 +236,8 @@ Estas reglas se hacen cumplir de dos maneras:
 │   │       └── access/route.ts
 │   ├── proxy.ts                # nonce de CSP y cabeceras
 │   ├── domain/                 # TypeScript puro: sin React, Next, red ni proveedor
-│   │   ├── requirement/        # schema, analysis, coverage, completeness, figures, projection, diff
+│   │   ├── requirement/        # schema, observations, invariants, coverage, figures, completeness,
+│   │   │                       # analysis, projection, diff, json-schema
 │   │   └── session/            # types, reducer, phase, guards, export
 │   ├── contracts/              # DTO HTTP (Zod) compartidos por cliente y servidor
 │   ├── server/                 # solo servidor (import "server-only")
@@ -381,11 +384,21 @@ export type VersionRequerimiento = {
 | `CLASE_INEXISTENTE` | error | El `sujeto` o el `objeto` de una relación no está en `clases`. |
 | `REFERENCIA_INEXISTENTE` | error | Un elemento de `justifica` no está en el espacio de nombres. |
 | `USA_INVALIDO` | error | El `usa` de una regla cita algo que no es una clase ni un predicado. |
-| `CIFRA_NO_APORTADA` | error | Un campo de texto contiene un porcentaje o un monto que no aparece en los mensajes del usuario. |
+| `CIFRA_NO_APORTADA` | error | Un porcentaje o un monto que no aparece en los mensajes del usuario, en `necesidad`, `decision_objetivo` o `periodo`. En una regla, salvo que esté declarado como supuesto en `preguntas_abiertas`; en una pregunta abierta, salvo que sea el umbral de alguna regla. Ver la tabla siguiente. |
 | `REGLA_SIN_COBERTURA` | advertencia, baja la completitud | Algún elemento del `usa` de la regla no tiene columnas que lo alimenten. |
 | `DATO_SIN_DEFINIR` | advertencia, baja la completitud | `decision_objetivo` o `periodo` es `null`, o no hay reglas, o no hay fuentes. |
 | `ELEMENTO_HUERFANO` | advertencia | Una clase o un predicado que ninguna regla usa y ninguna columna alimenta. Puede sobrar. |
 | `UMBRAL_NO_CONFIRMADO` | advertencia | El enunciado de una regla tiene un número que no aparece en los mensajes del usuario ni en `preguntas_abiertas`. |
+
+**Cifras por campo.** El prompt le pide al modelo que, si una regla necesita un umbral que el usuario no dio, lo proponga como supuesto en `preguntas_abiertas`. La guarda de cifras acepta ese caso y rechaza el resto:
+
+| Campo | Porcentaje o monto no aportado | Otro número no aportado |
+|---|---|---|
+| `necesidad`, `decision_objetivo`, `alcance.periodo` | `CIFRA_NO_APORTADA` | Se ignora |
+| `reglas_candidatas[].enunciado` | `CIFRA_NO_APORTADA`, salvo que el valor esté en `preguntas_abiertas` | `UMBRAL_NO_CONFIRMADO`, salvo que el valor esté en `preguntas_abiertas` |
+| `preguntas_abiertas[]` | `CIFRA_NO_APORTADA`, salvo que el valor sea el umbral de alguna regla | Se ignora |
+
+Un porcentaje cuenta como aportado solo si el usuario dio ese mismo porcentaje; un monto o un número, si dio ese valor de cualquier forma. "1.500" y "1,500" se interpretan con las dos convenciones de separadores. Las fechas (`AAAA-MM`) y los números pegados a letras (`R1`, `v2`, `columna_3`) no son cifras.
 
 **Alimentación y cobertura**
 
@@ -521,7 +534,8 @@ export const ErrorResponseSchema = z.strictObject({
 3. Exigir sesión (verificar la cookie firmada) ....... 401 ACCESS_REQUIRED
 4. Rate limit: sesión, IP y global ................... 429 RATE_LIMITED + Retry-After
 5. Validar el body con TurnoRequestSchema ............ 400 INVALID_REQUEST
-6. analizarRequerimiento(vigente); si hay errores .... 400 INVALID_REQUEST
+6. analizarRequerimiento(vigente, corpus, { verificarCifras: false });
+   si hay errores ...................................... 400 INVALID_REQUEST
 7. runTurn(input, deps, AbortSignal.any([req.signal, plazo]))
 8. Registrar el turno en el log y responder 200 con Cache-Control: no-store
    Si hay error: LlmError o plazo vencido → mapError → 502 / 503 / 504
