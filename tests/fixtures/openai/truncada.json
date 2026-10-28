@@ -1,0 +1,29 @@
+{
+  "id": "chatcmpl-truncada",
+  "object": "chat.completion",
+  "created": 1790000000,
+  "model": "gpt-5-mini-2025-08-07",
+  "choices": [
+    {
+      "index": 0,
+      "message": {
+        "role": "assistant",
+        "content": null,
+        "refusal": null,
+        "tool_calls": [
+          {
+            "id": "call_cortada",
+            "type": "function",
+            "function": { "name": "registrar", "arguments": "{\"dato\": \"cor" }
+          }
+        ]
+      },
+      "finish_reason": "length"
+    }
+  ],
+  "usage": {
+    "prompt_tokens": 120,
+    "completion_tokens": 500,
+    "total_tokens": 620
+  }
+}
