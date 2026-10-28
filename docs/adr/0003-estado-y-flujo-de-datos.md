@@ -25,7 +25,7 @@ Mientras el usuario conversa, un artefacto tipado (`RequerimientoMotor`) evoluci
    - el modelo ve una sola versión vigente;
    - el costo en tokens no crece con cada versión.
 
-4. **Las versiones son inmutables.** Una tool call válida produce una propuesta, y el cliente la agrega como `v(n+1)`. Confirmar, reabrir y elegir qué versión mirar son transiciones locales y deterministas: no llaman al LLM. Solo se puede confirmar si `canConfirm(sesion)` lo permite: tiene que ser la versión más reciente, con completitud efectiva `suficiente_para_confirmar` y sin ningún turno en curso.
+4. **Las versiones son inmutables.** Una tool call válida produce una propuesta, y el cliente la agrega como `v(n+1)`. Confirmar, reabrir y elegir qué versión mirar son transiciones locales y deterministas: no llaman al LLM. Solo se puede confirmar si `canConfirm(sesion)` lo permite: tiene que ser la versión más reciente, con completitud efectiva `suficiente_para_confirmar`, sin ningún turno en curso y sin un mensaje fallido pendiente. Si el usuario está mirando una versión anterior, no se confirma: así no confirma por error una versión distinta de la que ve.
 
 5. **El transporte es un Route Handler, `POST /api/interview`, con respuesta JSON y sin streaming en v1.** El resultado de un turno se modela como una secuencia de eventos de dominio (`texto`, `propuesta`, `error`, `fin`). En v1 esos eventos se serializan en una única respuesta JSON. Para agregar streaming (NDJSON) solo cambia la serialización, no el modelo.
 
@@ -42,7 +42,8 @@ Mientras el usuario conversa, un artefacto tipado (`RequerimientoMotor`) evoluci
 ## Consecuencias
 
 - El servidor no guarda datos del usuario. El cliente exporta la transcripción y el requerimiento (Markdown y JSON), y esa exportación sirve directamente para los entregables.
-- El payload crece con la conversación. Se acota con una ventana de mensajes que siempre conserva el primer mensaje del usuario (el planteo original) y con los límites de tamaño de ADR-0005. Además, el requerimiento vigente reemplaza al historial de versiones.
+- El payload crece con la conversación. Se acota con una ventana de mensajes que siempre conserva el primer mensaje del usuario (el planteo original) y el que se envía. La ventana se limita por cantidad (40) y también por **bytes**: 40 mensajes largos más el requerimiento vigente pueden superar los 64 KB de ADR-0005, y el 413 no se puede reintentar. El cliente descuenta de los 64 KB lo que pesa la versión vigente (`presupuestoDeMensajes`) y recorta los mensajes más antiguos con lo que queda. Además, el requerimiento vigente reemplaza al historial de versiones.
+- Si se recarga la página con un turno en curso, la respuesta se pierde. Al hidratar, ese mensaje queda como fallido y reintentable (`INTERRUPTED`) con el mismo `turnId`. El análisis de cada versión se recalcula al hidratar, sin confiar en lo guardado.
 - Un cliente puede manipular su propia sesión: mensajes del asistente, versión vigente o contadores. Solo se perjudica a sí mismo, y el servidor revalida todo lo que recibe y acota los contadores. Riesgo aceptado.
 - No hay continuidad entre dispositivos. Para el alcance del reto se acepta.
 

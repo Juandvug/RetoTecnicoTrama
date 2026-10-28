@@ -515,7 +515,7 @@ export const ErrorResponseSchema = z.strictObject({
 });
 ```
 
-- La ventana de `mensajes` la arma el cliente: siempre conserva el primer mensaje del usuario (el planteo original) y agrega los más recientes hasta el máximo.
+- La ventana de `mensajes` la arma el cliente (`armarVentana`): siempre conserva el primer mensaje del usuario (el planteo original) y el último, y agrega los más recientes hasta el máximo de 40 o hasta agotar el presupuesto de bytes, lo que ocurra primero. El presupuesto son los 64 KB del endpoint menos lo que pesa el requerimiento vigente (ADR-0003).
 - El cliente también valida la respuesta con `TurnoResponseSchema` antes de tocar el estado.
 
 ### 7.2 `POST /api/access`
