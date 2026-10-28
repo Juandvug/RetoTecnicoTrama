@@ -1,0 +1,9 @@
+[
+  { "texto": "¿Qué decisión querés tomar con esto?" },
+  { "llamada": { "nombre": "registrar", "argumentos": { "dato": "valor" } } },
+  { "texto": "Te dejé una propuesta en el panel." },
+  { "rechazo": "No puedo ayudar con eso." },
+  { "truncada": { "parcial": "{\"dato\": \"cor", "comoLlamada": "registrar" } },
+  { "error": { "kind": "rate_limited", "retryAfterMs": 2000 } },
+  { "texto": "Con demora.", "demoraMs": 1500 }
+]
