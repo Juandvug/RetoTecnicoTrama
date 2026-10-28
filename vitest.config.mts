@@ -7,6 +7,7 @@ export default defineConfig({
   resolve: {
     alias: {
       "@": ruta("./src"),
+      "@tests": ruta("./tests"),
       // server-only lanza un error fuera de React Server Components; en los
       // tests de Node se reemplaza por un módulo vacío.
       "server-only": ruta("./tests/support/server-only.ts"),
