@@ -207,7 +207,7 @@ useInterview(): {
 | `server/llm/openai/**` | `server/llm/port`, `openai` | `domain/**`, `server/interview/**` |
 | `server/**` (resto) | `domain/**`, `contracts/**`, `server/**` | `features/**`, `components/**` |
 | `features/**`, `components/**`, `lib/**` | `domain/**`, `contracts/**`, `components/**`, `lib/**` | `server/**`, `openai` |
-| `app/api/**` | `server/composition`, `server/http` | El resto de `server/**` |
+| `app/**` | `server/composition`, `server/http` | El resto de `server/**` |
 
 Estas reglas se hacen cumplir de dos maneras:
 
@@ -655,14 +655,16 @@ Además, siempre hay una etiqueta de texto visible.
 
 | Estado | Contenedor | Etiqueta |
 |---|---|---|
-| Sin propuesta | `border border-dashed bg-muted`, texto `text-muted-foreground` | "Todavía no hay requerimiento" |
+| Sin propuesta | `border border-dashed bg-muted` | "Todavía no hay requerimiento" |
 | Faltan datos | `border border-dashed bg-background` | "Faltan datos", con la lista de motivos |
 | Esperando confirmación | `border bg-foreground/5 font-medium` (sólido, 1 px) | "Esperando confirmación" |
 | Confirmado | `border-2 bg-foreground/5 font-semibold` (sólido, 2 px) | "Confirmado · vN" |
-| Versión anterior (solo lectura) | `border border-dashed bg-muted text-muted-foreground` | "vN · reemplazada por vM" |
+| Versión anterior (solo lectura) | `border border-dashed bg-muted` | "vN · reemplazada por vM" |
 | Regla sin cobertura | ítem con borde punteado | "Sin datos para: …" |
 | Elemento nuevo respecto de la versión anterior | `font-semibold` con un marcador de texto | "nuevo" |
 | Turno en curso | `aria-busy` en el chat; el panel no cambia | "Pensando…" |
+
+**Contraste.** `text-muted-foreground` sobre `bg-muted` da 4,34:1 en el tema claro (oklch 0,556 sobre 0,97), por debajo del 4,5:1 de WCAG AA; sobre `bg-foreground/5` da todavía menos. Por eso, sobre esos dos fondos el texto va en `text-foreground`, y lo apagado se reserva para `bg-background`, `bg-card` y `bg-sidebar` (4,53:1 o más). Por la misma razón, la etiqueta "Agente" o "Vos" va encima de la burbuja, sobre el fondo de la columna, y no adentro.
 
 Contenido del panel, de arriba hacia abajo:
 
