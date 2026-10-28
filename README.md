@@ -18,6 +18,7 @@ Chat web que conduce una entrevista guiada y convierte una necesidad de negocio 
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | Módulos, contrato `RequerimientoMotor`, contrato HTTP, flujos de estado, system prompt y salvaguardas |
 | [docs/adr](docs/adr/README.md) | Ocho decisiones de arquitectura, con las alternativas descartadas |
 | [PLAN.md](PLAN.md) | Fases de implementación, dependencias y criterios de aceptación |
+| [docs/enunciado.md](docs/enunciado.md) | Extracto del enunciado del reto: tokens de estilo, contrato base, reglas y criterios de evaluación |
 
 ## Cómo funciona
 
