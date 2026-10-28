@@ -127,6 +127,55 @@ describe("Composer", () => {
     expect(llamadas).toHaveLength(0);
   });
 
+  describe("largo del mensaje", () => {
+    const pegar = (largo: number) =>
+      fireEvent.change(composer(), { target: { value: "a".repeat(largo) } });
+
+    it("no muestra el contador mientras sobra espacio", async () => {
+      await renderWorkspace();
+      pegar(100);
+      expect(screen.queryByText(/\/ 2\.000/)).toBeNull();
+    });
+
+    it("avisa cuánto falta al acercarse al límite, sin bloquear", async () => {
+      await renderWorkspace();
+      pegar(1700);
+      expect(screen.getByText("1.700 / 2.000")).toBeInTheDocument();
+      expect(screen.queryByRole("alert")).toBeNull();
+      expect(screen.getByRole("button", { name: "Enviar" })).toBeEnabled();
+    });
+
+    it("al pegar de más avisa de inmediato y deshabilita Enviar, sin esperar al Enter", async () => {
+      const { llamadas } = responderSiempre();
+      await renderWorkspace();
+      pegar(2650);
+
+      expect(screen.getByRole("alert")).toHaveTextContent(
+        "El mensaje supera los 2000 caracteres.",
+      );
+      expect(screen.getByText("2.650 / 2.000")).toBeInTheDocument();
+      expect(screen.getByRole("button", { name: "Enviar" })).toBeDisabled();
+      expect(
+        screen.getByRole("button", { name: "Enviar" }),
+      ).toHaveAccessibleDescription(/supera los 2000/);
+
+      fireEvent.keyDown(composer(), { key: "Enter" });
+      expect(llamadas).toHaveLength(0);
+    });
+
+    it("el aviso desaparece al recortar el texto y entonces se puede enviar", async () => {
+      const user = userEvent.setup();
+      const { llamadas } = responderSiempre();
+      await renderWorkspace();
+      pegar(2650);
+      pegar(1500);
+
+      expect(screen.queryByRole("alert")).toBeNull();
+      await user.type(composer(), "{Enter}");
+      expect(llamadas).toHaveLength(1);
+    });
+  });
+
   it("el snapshot lleva la versión vigente y la intención de ajuste", async () => {
     const user = userEvent.setup();
     const { llamadas } = responderSiempre("Listo, ajusté el período.");
