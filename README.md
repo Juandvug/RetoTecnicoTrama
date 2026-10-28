@@ -48,11 +48,18 @@ Requisitos: Node.js 24 (fijado en `.nvmrc`) y pnpm.
 
 ```bash
 pnpm install
-cp .env.example .env.local   # completar OPENAI_API_KEY, LLM_MODEL, ACCESS_CODE y SESSION_SECRET
+cp .env.example .env.local
 pnpm dev
 ```
 
-Para trabajar sin key de OpenAI (desde F4), definí `LLM_PROVIDER=fake` y `FAKE_LLM_SCENARIO=<escenario>`, y la app usa el cliente simulado. La lista completa de variables está en [ARCHITECTURE.md §11](docs/ARCHITECTURE.md#11-configuración).
+En `.env.local` hay que completar, como mínimo, el acceso. Sin estas dos variables la API responde 503, en cualquier entorno:
+
+- `ACCESS_CODE`: 8 caracteres o más;
+- `SESSION_SECRET`: 32 bytes o más, por ejemplo con `openssl rand -base64 48`.
+
+Para trabajar sin key de OpenAI, definí `LLM_PROVIDER=fake` y `FAKE_LLM_SCENARIO=ejemplo` (los escenarios están en `tests/fixtures/scenarios`), y la API usa el cliente simulado. Con `LLM_PROVIDER=openai` hacen falta `OPENAI_API_KEY` y `LLM_MODEL`; el adaptador de OpenAI todavía no está. En local el rate limiting usa memoria; Upstash solo es obligatorio en producción. La lista completa de variables está en [ARCHITECTURE.md §11](docs/ARCHITECTURE.md#11-configuración).
+
+La key de OpenAI va solo en `.env.local` y en las variables de entorno de Vercel. Nunca lleva el prefijo `NEXT_PUBLIC_`, nunca se commitea y nunca se escribe en la documentación.
 
 | Script | Qué hace |
 |---|---|

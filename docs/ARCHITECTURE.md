@@ -822,8 +822,8 @@ Todas las variables se validan con Zod en `src/server/config/env.ts` al arrancar
 | `LLM_PROVIDER` | no (por defecto, `openai`) | `openai` o `fake`. `fake` está prohibido con `VERCEL_ENV=production` |
 | `LLM_MODEL` | sí | Modelo. Se fija cuando se sepa qué modelos habilita la key (pregunta 2, pendiente) |
 | `LLM_MAX_OUTPUT_TOKENS` | no | Tope por llamada |
-| `ACCESS_CODE` | sí | Código de acceso |
-| `SESSION_SECRET` | sí (32 bytes o más) | Firma HMAC de la cookie de sesión |
+| `ACCESS_CODE` | sí, en todos los entornos (8 caracteres o más) | Código de acceso |
+| `SESSION_SECRET` | sí, en todos los entornos (32 bytes o más) | Firma HMAC de la cookie de sesión y de los seudónimos de IP y sesión |
 | `UPSTASH_REDIS_REST_URL`, `UPSTASH_REDIS_REST_TOKEN` | sí | Rate limiting |
 | `RATE_LIMIT_SESSION`, `RATE_LIMIT_IP`, `RATE_LIMIT_GLOBAL` | no | Límites (ADR-0005) |
 | `MAX_MENSAJES_DELIMITAR`, `MAX_TURNOS_SIN_VERSION` | no (por defecto, 3 y 3) | Umbrales de fase (ADR-0007) |
