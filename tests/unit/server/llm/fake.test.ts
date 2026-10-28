@@ -11,7 +11,7 @@ import {
   truncada,
 } from "@/server/llm/fake/client";
 import { cargarEscenario, parsearEscenario } from "@/server/llm/fake/scenarios";
-import { LlmError } from "@/server/llm/port";
+import { LlmError, type LlmMessage } from "@/server/llm/port";
 import { unRequest } from "@tests/contract/llm-client.contract";
 
 const señal = () => new AbortController().signal;
@@ -196,6 +196,120 @@ describe("escenarios JSON", () => {
     ["un paso desconocido", [{ saludo: "hola" }]],
     ["un paso con campos de más", [{ texto: "a", extra: 1 }]],
     ["un error de un tipo desconocido", [{ error: { kind: "raro" } }]],
+  ])("rechaza %s", (_, json) => {
+    expect(() => parsearEscenario(json)).toThrow();
+  });
+});
+
+describe("escenarios conversacionales", () => {
+  const conversacion = parsearEscenario({
+    turnos: [
+      { cuando: "Hola", pasos: [{ texto: "¿Qué decisión querés tomar?" }] },
+      {
+        cuando: "propuesta",
+        pasos: [
+          { llamada: { nombre: "registrar", argumentos: { dato: "v" } } },
+          { texto: "Te dejé la propuesta." },
+        ],
+      },
+      {
+        cuando: "corte",
+        fallasAntes: { kind: "timeout", veces: 2 },
+        pasos: [{ texto: "Llegó." }],
+      },
+    ],
+    porDefecto: [{ texto: "Entendido." }],
+  });
+
+  const conMensajes = (...messages: LlmMessage[]) => ({
+    ...unRequest(),
+    messages,
+  });
+  const usuario = (content: string): LlmMessage => ({ role: "user", content });
+  const respuestaConTool: LlmMessage = {
+    role: "assistant",
+    content: null,
+    toolCalls: [{ id: "c1", name: "registrar", arguments: "{}" }],
+  };
+
+  it("elige el turno por el último mensaje del usuario, sin importar el orden", async () => {
+    const fake = new FakeLlmClient(conversacion);
+    expect(
+      (
+        await fake.complete(
+          conMensajes(usuario("Quiero la propuesta")),
+          señal(),
+        )
+      ).toolCalls[0]?.name,
+    ).toBe("registrar");
+    expect(
+      (await fake.complete(conMensajes(usuario("hola, ¿cómo va?")), señal()))
+        .text,
+    ).toBe("¿Qué decisión querés tomar?");
+  });
+
+  it("el paso dentro del turno es la cantidad de respuestas del asistente que siguen al mensaje", async () => {
+    const fake = new FakeLlmClient(conversacion);
+    const request = conMensajes(
+      usuario("Hola"),
+      { role: "assistant", content: "¿Qué decisión?", toolCalls: [] },
+      usuario("Mandame la propuesta"),
+      respuestaConTool,
+      { role: "tool", toolCallId: "c1", content: '{"ok":true}' },
+    );
+    expect((await fake.complete(request, señal())).text).toBe(
+      "Te dejé la propuesta.",
+    );
+    // Más allá del último paso, se repite el último.
+    const despues = conMensajes(
+      ...request.messages,
+      respuestaConTool,
+      respuestaConTool,
+    );
+    expect((await fake.complete(despues, señal())).text).toBe(
+      "Te dejé la propuesta.",
+    );
+  });
+
+  it("un mensaje sin turno usa porDefecto", async () => {
+    const fake = new FakeLlmClient(conversacion);
+    expect(
+      (await fake.complete(conMensajes(usuario("Otra cosa")), señal())).text,
+    ).toBe("Entendido.");
+  });
+
+  it("fallasAntes falla esa cantidad de intentos una sola vez por texto exacto", async () => {
+    const fake = new FakeLlmClient(conversacion);
+    const pedir = (texto: string) =>
+      fake.complete(conMensajes(usuario(texto)), señal());
+
+    await expect(pedir("corte A")).rejects.toMatchObject({ kind: "timeout" });
+    await expect(pedir("corte A")).rejects.toMatchObject({ kind: "timeout" });
+    expect((await pedir("corte A")).text).toBe("Llegó.");
+    expect((await pedir("corte A")).text).toBe("Llegó.");
+    // Otro texto vuelve a fallar: cada test usa su propio mensaje.
+    await expect(pedir("corte B")).rejects.toMatchObject({ kind: "timeout" });
+  });
+
+  it.each([
+    ["sin porDefecto", { turnos: [{ cuando: "a", pasos: [{ texto: "b" }] }] }],
+    [
+      "un turno sin pasos",
+      { turnos: [{ cuando: "a", pasos: [] }], porDefecto: [{ texto: "b" }] },
+    ],
+    [
+      "fallas de un tipo desconocido",
+      {
+        turnos: [
+          {
+            cuando: "a",
+            fallasAntes: { kind: "raro", veces: 1 },
+            pasos: [{ texto: "b" }],
+          },
+        ],
+        porDefecto: [{ texto: "b" }],
+      },
+    ],
   ])("rechaza %s", (_, json) => {
     expect(() => parsearEscenario(json)).toThrow();
   });

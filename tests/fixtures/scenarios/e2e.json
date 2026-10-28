@@ -1,0 +1,274 @@
+{
+  "turnos": [
+    {
+      "cuando": "aumentaron los reclamos",
+      "pasos": [
+        {
+          "texto": "¿Qué decisión querés tomar con esto, y desde cuándo lo notan?"
+        }
+      ]
+    },
+    {
+      "cuando": "quiero decidir si refuerzo",
+      "pasos": [
+        {
+          "llamada": {
+            "nombre": "registrar_requerimiento",
+            "argumentos": {
+              "necesidad": "Explicar el aumento de reclamos de clientes desde marzo de 2026",
+              "decision_objetivo": "Decidir si reforzar el soporte telefónico o el chat",
+              "alcance": {
+                "periodo": "2026-03 / 2026-10",
+                "unidades": ["Teléfono", "Chat"]
+              },
+              "esquema": {
+                "clases": ["Reclamo", "Canal", "Turno"],
+                "relaciones": [
+                  {
+                    "sujeto": "Reclamo",
+                    "predicado": "ingresaPor",
+                    "objeto": "Canal"
+                  },
+                  {
+                    "sujeto": "Reclamo",
+                    "predicado": "ocurreEn",
+                    "objeto": "Turno"
+                  }
+                ]
+              },
+              "reglas_candidatas": [
+                {
+                  "id": "R1",
+                  "enunciado": "Si los Reclamos que ingresan por un Canal se concentran en Turnos con pocos agentes, el refuerzo va a ese Canal",
+                  "usa": ["Reclamo", "ingresaPor", "Canal", "ocurreEn", "Turno"]
+                },
+                {
+                  "id": "R2",
+                  "enunciado": "Si los Reclamos de un Canal repiten el mismo motivo, el problema es del proceso y no de capacidad",
+                  "usa": ["Reclamo", "ingresaPor", "Canal"]
+                }
+              ],
+              "fuentes_requeridas": [],
+              "preguntas_abiertas": [
+                "¿Qué datos registran de cada reclamo y de los turnos del equipo?"
+              ],
+              "completitud": "faltan_datos"
+            }
+          }
+        },
+        {
+          "texto": "Te dejé una primera versión en el panel. ¿Qué datos tienen de cada reclamo y de los turnos del equipo?"
+        }
+      ]
+    },
+    {
+      "cuando": "exportación del crm",
+      "pasos": [
+        {
+          "llamada": {
+            "nombre": "registrar_requerimiento",
+            "argumentos": {
+              "necesidad": "Explicar el aumento de reclamos de clientes desde marzo de 2026",
+              "decision_objetivo": "Decidir si reforzar el soporte telefónico o el chat",
+              "alcance": {
+                "periodo": "2026-03 / 2026-10",
+                "unidades": ["Teléfono", "Chat"]
+              },
+              "esquema": {
+                "clases": ["Reclamo", "Canal", "Turno"],
+                "relaciones": [
+                  {
+                    "sujeto": "Reclamo",
+                    "predicado": "ingresaPor",
+                    "objeto": "Canal"
+                  },
+                  {
+                    "sujeto": "Reclamo",
+                    "predicado": "ocurreEn",
+                    "objeto": "Turno"
+                  }
+                ]
+              },
+              "reglas_candidatas": [
+                {
+                  "id": "R1",
+                  "enunciado": "Si los Reclamos que ingresan por un Canal se concentran en Turnos con pocos agentes, el refuerzo va a ese Canal",
+                  "usa": ["Reclamo", "ingresaPor", "Canal", "ocurreEn", "Turno"]
+                },
+                {
+                  "id": "R2",
+                  "enunciado": "Si los Reclamos de un Canal repiten el mismo motivo, el problema es del proceso y no de capacidad",
+                  "usa": ["Reclamo", "ingresaPor", "Canal"]
+                }
+              ],
+              "fuentes_requeridas": [
+                {
+                  "nombre": "Reclamos del CRM",
+                  "tipo": "crm-export",
+                  "columnas_minimas": [
+                    {
+                      "nombre": "reclamo_id",
+                      "justifica": ["Reclamo"]
+                    },
+                    {
+                      "nombre": "canal",
+                      "justifica": ["Canal", "ingresaPor"]
+                    },
+                    {
+                      "nombre": "fecha_hora",
+                      "justifica": ["ocurreEn", "R1"]
+                    },
+                    {
+                      "nombre": "motivo",
+                      "justifica": ["Reclamo", "R2"]
+                    }
+                  ],
+                  "justifica": ["Reclamo", "R1", "R2"]
+                },
+                {
+                  "nombre": "Turnos de soporte",
+                  "tipo": "excel",
+                  "columnas_minimas": [
+                    {
+                      "nombre": "turno_id",
+                      "justifica": ["Turno"]
+                    },
+                    {
+                      "nombre": "inicio_fin",
+                      "justifica": ["Turno", "ocurreEn"]
+                    },
+                    {
+                      "nombre": "agentes_asignados",
+                      "justifica": ["Turno", "R1"]
+                    }
+                  ],
+                  "justifica": ["Turno", "ocurreEn", "R1"]
+                }
+              ],
+              "preguntas_abiertas": [
+                "¿El motivo del reclamo se carga con categorías fijas o como texto libre?"
+              ],
+              "completitud": "suficiente_para_confirmar"
+            }
+          }
+        },
+        {
+          "texto": "Con eso alcanza. Revisá la propuesta en el panel y, si está bien, confirmala."
+        }
+      ]
+    },
+    {
+      "cuando": "sumá también el email",
+      "pasos": [
+        {
+          "llamada": {
+            "nombre": "registrar_requerimiento",
+            "argumentos": {
+              "necesidad": "Explicar el aumento de reclamos de clientes desde marzo de 2026",
+              "decision_objetivo": "Decidir si reforzar el soporte telefónico o el chat",
+              "alcance": {
+                "periodo": "2026-03 / 2026-10",
+                "unidades": ["Teléfono", "Chat", "Email"]
+              },
+              "esquema": {
+                "clases": ["Reclamo", "Canal", "Turno"],
+                "relaciones": [
+                  {
+                    "sujeto": "Reclamo",
+                    "predicado": "ingresaPor",
+                    "objeto": "Canal"
+                  },
+                  {
+                    "sujeto": "Reclamo",
+                    "predicado": "ocurreEn",
+                    "objeto": "Turno"
+                  }
+                ]
+              },
+              "reglas_candidatas": [
+                {
+                  "id": "R1",
+                  "enunciado": "Si los Reclamos que ingresan por un Canal se concentran en Turnos con pocos agentes, el refuerzo va a ese Canal",
+                  "usa": ["Reclamo", "ingresaPor", "Canal", "ocurreEn", "Turno"]
+                },
+                {
+                  "id": "R2",
+                  "enunciado": "Si los Reclamos de un Canal repiten el mismo motivo, el problema es del proceso y no de capacidad",
+                  "usa": ["Reclamo", "ingresaPor", "Canal"]
+                }
+              ],
+              "fuentes_requeridas": [
+                {
+                  "nombre": "Reclamos del CRM",
+                  "tipo": "crm-export",
+                  "columnas_minimas": [
+                    {
+                      "nombre": "reclamo_id",
+                      "justifica": ["Reclamo"]
+                    },
+                    {
+                      "nombre": "canal",
+                      "justifica": ["Canal", "ingresaPor"]
+                    },
+                    {
+                      "nombre": "fecha_hora",
+                      "justifica": ["ocurreEn", "R1"]
+                    },
+                    {
+                      "nombre": "motivo",
+                      "justifica": ["Reclamo", "R2"]
+                    }
+                  ],
+                  "justifica": ["Reclamo", "R1", "R2"]
+                },
+                {
+                  "nombre": "Turnos de soporte",
+                  "tipo": "excel",
+                  "columnas_minimas": [
+                    {
+                      "nombre": "turno_id",
+                      "justifica": ["Turno"]
+                    },
+                    {
+                      "nombre": "inicio_fin",
+                      "justifica": ["Turno", "ocurreEn"]
+                    },
+                    {
+                      "nombre": "agentes_asignados",
+                      "justifica": ["Turno", "R1"]
+                    }
+                  ],
+                  "justifica": ["Turno", "ocurreEn", "R1"]
+                }
+              ],
+              "preguntas_abiertas": [
+                "¿El motivo del reclamo se carga con categorías fijas o como texto libre?"
+              ],
+              "completitud": "suficiente_para_confirmar"
+            }
+          }
+        },
+        {
+          "texto": "Listo: agregué el email al alcance. Revisá la versión nueva y confirmala si está bien."
+        }
+      ]
+    },
+    {
+      "cuando": "falla-una-vez",
+      "fallasAntes": {
+        "kind": "timeout",
+        "veces": 3
+      },
+      "pasos": [
+        {
+          "texto": "Ahora sí llegó tu mensaje."
+        }
+      ]
+    }
+  ],
+  "porDefecto": [
+    {
+      "texto": "Entendido. ¿Qué decisión querés tomar con esto?"
+    }
+  ]
+}
