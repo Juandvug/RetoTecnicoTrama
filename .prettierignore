@@ -1,0 +1,6 @@
+# La documentación se edita a mano; Prettier reformatearía las tablas.
+*.md
+pnpm-lock.yaml
+.next
+coverage
+next-env.d.ts
