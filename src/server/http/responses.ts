@@ -1,6 +1,11 @@
 import "server-only";
 
-import type { CodigoDeError, ErrorResponse } from "@/contracts/interview";
+import {
+  TIPO_NDJSON,
+  type CodigoDeError,
+  type ErrorResponse,
+  type EventoDeTurno,
+} from "@/contracts/interview";
 
 // Respuestas de la API: JSON, sin caché (ADR-0005) y con errores en español,
 // sin detalles internos (ADR-0004).
@@ -17,6 +22,46 @@ export function responderJson(
     headers: {
       "Content-Type": "application/json; charset=utf-8",
       ...SIN_CACHE,
+      ...cabeceras,
+    },
+  });
+}
+
+/**
+ * Una respuesta NDJSON que se escribe a medida que `producir` envía eventos.
+ * `no-transform` evita que una compresión intermedia la retenga entera.
+ */
+export function responderFlujo(
+  producir: (enviar: (evento: EventoDeTurno) => void) => Promise<void>,
+  cabeceras: Record<string, string> = {},
+): Response {
+  const codificador = new TextEncoder();
+  const cuerpo = new ReadableStream<Uint8Array>({
+    async start(controlador) {
+      let abierto = true;
+      const enviar = (evento: EventoDeTurno) => {
+        if (!abierto) return;
+        try {
+          controlador.enqueue(
+            codificador.encode(`${JSON.stringify(evento)}\n`),
+          );
+        } catch {
+          abierto = false; // el cliente ya se fue
+        }
+      };
+      try {
+        await producir(enviar);
+      } finally {
+        if (abierto) controlador.close();
+      }
+    },
+  });
+  return new Response(cuerpo, {
+    status: 200,
+    headers: {
+      "Content-Type": `${TIPO_NDJSON}; charset=utf-8`,
+      "Cache-Control": "no-store, no-transform",
+      "X-Accel-Buffering": "no",
       ...cabeceras,
     },
   });

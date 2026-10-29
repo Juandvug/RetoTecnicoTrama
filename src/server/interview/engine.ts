@@ -1,9 +1,8 @@
 import "server-only";
 
-import type { TurnoInput } from "@/contracts/interview";
+import type { EventoDeTexto, TurnoInput } from "@/contracts/interview";
 import {
   analizarRequerimiento,
-  detectarCifras,
   validarArgumentos,
   type Analisis,
   type RequerimientoMotor,
@@ -22,6 +21,7 @@ import { TEXTO_DE_RECHAZO, textoDeRespaldo } from "./fallbacks";
 import { politicaDeTurno } from "./policy";
 import { armarContexto, escaparDelimitadores } from "./prompt/context";
 import { PROMPT_VERSION, SYSTEM_PROMPT } from "./prompt/system";
+import { cifrasNoAportadas, crearTransmisor } from "./streaming";
 import {
   definicionDeLaTool,
   INSTRUCCION_DE_CIERRE,
@@ -62,11 +62,15 @@ const instruccionDeCorreccion = (cifras: string[]) =>
  * contexto, llama al modelo, valida lo que registra, lo repara si hace falta y
  * revisa el texto antes de devolverlo. Los errores del proveedor (`LlmError`)
  * se propagan; el handler HTTP los traduce.
+ *
+ * Con `alTexto`, el texto para el usuario se transmite a medida que llega, sin
+ * cifras no aportadas. Es provisional: el resultado sigue siendo lo que vale.
  */
 export async function runTurn(
   input: TurnoInput,
   deps: InterviewDeps,
   signal: AbortSignal,
+  alTexto?: (evento: EventoDeTexto) => void,
 ): Promise<TurnoResultado> {
   const { llm, clock, config, logger } = deps;
 
@@ -132,12 +136,43 @@ export async function runTurn(
   let reparaciones = 0;
   let tokensEntrada = 0;
   let tokensSalida = 0;
+  /** Hay texto transmitido a la vista del usuario. */
+  let transmitido = false;
+
+  /** Opciones para transmitir el texto de una llamada, si hay a quién. */
+  const transmision = (emitir: (evento: EventoDeTexto) => void) => {
+    const reiniciar = () => {
+      if (transmitido) emitir({ tipo: "reinicio" });
+      transmitido = false;
+    };
+    // Lo que se mostró de una llamada anterior (un texto previo a una tool
+    // call) se reemplaza con el de esta.
+    reiniciar();
+    const nuevo = () =>
+      crearTransmisor(corpus, (texto) => {
+        transmitido = true;
+        emitir({ tipo: "texto", texto });
+      });
+    let transmisor = nuevo();
+    return {
+      opciones: {
+        onTextDelta: (delta: string) => transmisor.agregar(delta),
+        onTextReset: () => {
+          reiniciar();
+          transmisor = nuevo();
+        },
+      },
+      cerrar: () => transmisor.cerrar(),
+    };
+  };
 
   const llamar = async (
     toolChoice: LlmToolChoice,
     correccion?: string,
+    transmitir = false,
   ): Promise<LlmResponse> => {
     llamadas++;
+    const flujo = transmitir && alTexto ? transmision(alTexto) : null;
     const respuesta = await llm.complete(
       {
         system: SYSTEM_PROMPT,
@@ -148,8 +183,9 @@ export async function runTurn(
         maxOutputTokens: config.maxOutputTokens,
       },
       plazo.signal,
-      { deadline },
+      { deadline, ...flujo?.opciones },
     );
+    flujo?.cerrar();
     tokensEntrada += respuesta.usage?.inputTokens ?? 0;
     tokensSalida += respuesta.usage?.outputTokens ?? 0;
     return respuesta;
@@ -163,7 +199,8 @@ export async function runTurn(
   const redactar = async (correccion?: string): Promise<string | null> => {
     if (llamadas >= config.maxLlamadas) return null;
     try {
-      const respuesta = await llamar("none", correccion);
+      // La corrección de cifras no se transmite: reemplaza un texto entero.
+      const respuesta = await llamar("none", correccion, !correccion);
       return respuesta.refusal !== null ? null : respuesta.text?.trim() || null;
     } catch (error) {
       if (
@@ -179,7 +216,7 @@ export async function runTurn(
   };
 
   try {
-    let respuesta = await llamar(politica.toolChoice);
+    let respuesta = await llamar(politica.toolChoice, undefined, true);
     let propuesta: TurnoResultado["propuesta"] = null;
     let texto: string | null;
 
@@ -275,8 +312,7 @@ export async function runTurn(
     // si la cifra persiste, el texto de respaldo.
     let guardaCifras: GuardaDeCifras = "ok";
     if (texto) {
-      const cifrasDe = (t: string) =>
-        detectarCifras(t, corpus).filter((c) => c.tipo !== "numero");
+      const cifrasDe = (t: string) => cifrasNoAportadas(t, corpus);
       const halladas = cifrasDe(texto);
       if (halladas.length > 0) {
         const corregido = await redactar(

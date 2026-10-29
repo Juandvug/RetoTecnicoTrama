@@ -1,6 +1,10 @@
 import "server-only";
 
-import { TurnoRequestSchema, type TurnoResponse } from "@/contracts/interview";
+import {
+  TurnoRequestSchema,
+  type EventoDeTurno,
+  type TurnoResponse,
+} from "@/contracts/interview";
 import { analizarRequerimiento } from "@/domain/requirement";
 import { LIMITE_PAYLOAD_BYTES } from "@/domain/session";
 import { runTurn, type Clock, type InterviewDeps } from "@/server/interview";
@@ -23,7 +27,7 @@ import {
   demasiadasSolicitudes,
   ERRORES,
   responderError,
-  responderJson,
+  responderFlujo,
   type ErrorHttp,
 } from "./responses";
 
@@ -113,44 +117,60 @@ export async function manejarTurno(
     if (analisis.errores.length > 0) return rechazar(ERRORES.vigenteInvalida);
   }
 
-  // 7. El turno. La señal del request cancela la llamada en curso si el
-  // usuario cierra la pestaña; el plazo del turno lo pone el engine.
+  // 7. El turno, transmitido en NDJSON (ADR-0003). Lo anterior respondió con
+  // su status; desde acá el status es 200 y un error llega como evento. Si el
+  // usuario cierra la pestaña, la señal del request cancela la llamada en curso;
+  // el plazo del turno lo pone el engine.
   const sesionLog = seudonimo(sesion.id, deps.secretoDeSesion).slice(0, 12);
   const cabecerasDeLimite = { "X-RateLimit-Remaining": String(restantes) };
-  try {
-    const r = await runTurn(input, deps.interview, request.signal);
-    logger.info("turno", {
-      turnId: input.turnId,
-      sesion: sesionLog,
-      fase: r.meta.fase,
-      cierre: r.meta.cierre,
-      promptVersion: r.meta.promptVersion,
-      llamadas: r.meta.llamadas,
-      reparaciones: r.meta.reparaciones,
-      latenciaMs: clock.now() - inicio,
-      tokensEntrada: r.uso.tokensEntrada,
-      tokensSalida: r.uso.tokensSalida,
-      resultado: r.propuesta ? "propuesta" : "mensaje",
-      completitudEfectiva: r.propuesta?.analisis.completitudEfectiva ?? null,
-      guardaCifras: r.meta.guardaCifras,
-    });
-    const respuesta: TurnoResponse = {
-      turnId: input.turnId,
-      mensaje: r.mensaje,
-      propuesta: r.propuesta,
-      meta: r.meta,
-    };
-    return responderJson(200, respuesta, cabecerasDeLimite);
-  } catch (error) {
-    const http = errorHttpDe(error);
-    logger.error("turno", {
-      turnId: input.turnId,
-      sesion: sesionLog,
-      resultado: http.code,
-      status: http.status,
-      kind: http.kind,
-      latenciaMs: clock.now() - inicio,
-    });
-    return responderError(http, cabecerasDeLimite);
-  }
+
+  return responderFlujo(async (enviar: (evento: EventoDeTurno) => void) => {
+    try {
+      const r = await runTurn(input, deps.interview, request.signal, enviar);
+      logger.info("turno", {
+        turnId: input.turnId,
+        sesion: sesionLog,
+        fase: r.meta.fase,
+        cierre: r.meta.cierre,
+        promptVersion: r.meta.promptVersion,
+        llamadas: r.meta.llamadas,
+        reparaciones: r.meta.reparaciones,
+        latenciaMs: clock.now() - inicio,
+        tokensEntrada: r.uso.tokensEntrada,
+        tokensSalida: r.uso.tokensSalida,
+        resultado: r.propuesta ? "propuesta" : "mensaje",
+        completitudEfectiva: r.propuesta?.analisis.completitudEfectiva ?? null,
+        guardaCifras: r.meta.guardaCifras,
+      });
+      const respuesta: TurnoResponse = {
+        turnId: input.turnId,
+        mensaje: r.mensaje,
+        propuesta: r.propuesta,
+        meta: r.meta,
+      };
+      enviar({ tipo: "fin", respuesta });
+    } catch (error) {
+      const http = errorHttpDe(error);
+      logger.error("turno", {
+        turnId: input.turnId,
+        sesion: sesionLog,
+        resultado: http.code,
+        status: http.status,
+        kind: http.kind,
+        latenciaMs: clock.now() - inicio,
+      });
+      enviar({
+        tipo: "error",
+        status: http.status,
+        error: {
+          code: http.code,
+          message: http.message,
+          retryable: http.retryable,
+          ...(http.retryAfterSec !== undefined
+            ? { retryAfterSec: http.retryAfterSec }
+            : {}),
+        },
+      });
+    }
+  }, cabecerasDeLimite);
 }
