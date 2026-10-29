@@ -150,6 +150,15 @@ export class FakeLlmClient implements LlmClient {
 
     if (paso.demoraMs) await esperar(paso.demoraMs, signal);
     if (paso.respuesta instanceof LlmError) throw paso.respuesta;
-    return completar(paso.respuesta, indice);
+    const respuesta = completar(paso.respuesta, indice);
+    if (options?.onTextDelta && respuesta.text) {
+      // Transmite palabra por palabra, como lo haría un proveedor real.
+      for (const fragmento of respuesta.text.split(/(?<=\s)/)) {
+        await Promise.resolve();
+        if (signal.aborted) throw errorDeAbort(signal);
+        options.onTextDelta(fragmento);
+      }
+    }
+    return respuesta;
   }
 }

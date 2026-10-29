@@ -4,7 +4,13 @@ import { OpenAiLlmClient } from "@/server/llm/openai/client";
 import { adaptarEsquemaEstricto } from "@/server/llm/openai/strict-schema";
 import { esquemaJsonDelRequerimiento } from "@/domain/requirement/json-schema";
 import { unRequest } from "@tests/contract/llm-client.contract";
-import { fetchGrabado, RESPUESTAS } from "@tests/fixtures/openai/fetch";
+import {
+  fetchGrabado,
+  fetchSse,
+  fragmento,
+  fragmentoDeUso,
+  RESPUESTAS,
+} from "@tests/fixtures/openai/fetch";
 
 const señal = () => new AbortController().signal;
 
@@ -255,5 +261,98 @@ describe("adaptarEsquemaEstricto", () => {
       properties: { pattern: { type: "string" } },
     });
     expect(r).toMatchObject({ properties: { pattern: { type: "string" } } });
+  });
+});
+
+describe("OpenAiLlmClient · transmisión", () => {
+  async function transmitir(fetch: typeof globalThis.fetch) {
+    const deltas: string[] = [];
+    const r = await cliente(fetch).complete(unRequest(), señal(), {
+      onTextDelta: (d) => deltas.push(d),
+    });
+    return { r, deltas };
+  }
+
+  it("pide stream con uso y entrega el texto por partes", async () => {
+    const { fetch, pedidos } = fetchSse([
+      fragmento({ role: "assistant", content: "" }),
+      fragmento({ content: "¿Qué " }),
+      fragmento({ content: "decisión?" }),
+      fragmento({}, "stop"),
+      fragmentoDeUso(120, 30),
+    ]);
+    const { r, deltas } = await transmitir(fetch);
+
+    expect(pedidos[0]!.cuerpo).toMatchObject({
+      stream: true,
+      stream_options: { include_usage: true },
+    });
+    expect(deltas).toEqual(["¿Qué ", "decisión?"]);
+    expect(r).toEqual({
+      text: "¿Qué decisión?",
+      toolCalls: [],
+      refusal: null,
+      finishReason: "stop",
+      usage: { inputTokens: 120, outputTokens: 30 },
+    });
+  });
+
+  it("arma la tool call con los argumentos repartidos en fragmentos, sin transmitirlos", async () => {
+    const { fetch } = fetchSse([
+      fragmento({
+        tool_calls: [
+          {
+            index: 0,
+            id: "call_1",
+            type: "function",
+            function: { name: "registrar", arguments: "" },
+          },
+        ],
+      }),
+      fragmento({
+        tool_calls: [{ index: 0, function: { arguments: '{"dato"' } }],
+      }),
+      fragmento({
+        tool_calls: [{ index: 0, function: { arguments: ': "x"}' } }],
+      }),
+      fragmento({}, "tool_calls"),
+    ]);
+    const { r, deltas } = await transmitir(fetch);
+
+    expect(deltas).toEqual([]);
+    expect(r.finishReason).toBe("tool_calls");
+    expect(r.toolCalls).toEqual([
+      { id: "call_1", name: "registrar", arguments: '{"dato": "x"}' },
+    ]);
+    expect(r.usage).toBeNull();
+  });
+
+  it("junta el rechazo sin transmitirlo como texto", async () => {
+    const { fetch } = fetchSse([
+      fragmento({ refusal: "No puedo " }),
+      fragmento({ refusal: "ayudar con eso." }),
+      fragmento({}, "stop"),
+    ]);
+    const { r, deltas } = await transmitir(fetch);
+    expect(deltas).toEqual([]);
+    expect(r.refusal).toBe("No puedo ayudar con eso.");
+    expect(r.text).toBeNull();
+  });
+
+  it("marca la respuesta truncada", async () => {
+    const { fetch } = fetchSse([
+      fragmento({ content: "Una respuesta que" }),
+      fragmento({}, "length"),
+    ]);
+    const { r } = await transmitir(fetch);
+    expect(r.finishReason).toBe("length");
+  });
+
+  it("un error HTTP antes del stream se traduce igual", async () => {
+    const { fetch } = fetchGrabado(429, RESPUESTAS.cuota);
+    await expect(transmitir(fetch)).rejects.toMatchObject({
+      kind: "quota_exceeded",
+      retryable: false,
+    });
   });
 });
