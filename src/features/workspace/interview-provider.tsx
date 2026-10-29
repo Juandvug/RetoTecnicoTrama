@@ -24,6 +24,7 @@ import {
   type Permiso,
   type Sesion,
 } from "@/domain/session";
+import type { EventoDeTexto } from "@/contracts/interview";
 import { enviarTurno, type ErrorDeApi } from "@/lib/api-client";
 import { ahoraIso, nuevoId } from "@/lib/ids";
 import { guardarSesion, leerSesionGuardada } from "@/lib/storage";
@@ -47,6 +48,8 @@ type EstadoDelWorkspace = {
   recibida: number | null;
   /** Llegó una versión nueva que la pestaña del panel todavía no mostró. */
   novedad: boolean;
+  /** El texto que se va transmitiendo del turno en curso, provisional. */
+  parcial: { turnId: string; texto: string } | null;
 };
 
 type AccionDelWorkspace =
@@ -55,7 +58,8 @@ type AccionDelWorkspace =
   | { tipo: "aviso_descartado" }
   | { tipo: "acceso"; requerido: boolean }
   | { tipo: "espera"; turnId: string; hasta: number }
-  | { tipo: "novedad_vista" };
+  | { tipo: "novedad_vista" }
+  | { tipo: "parcial"; turnId: string; evento: EventoDeTexto };
 
 function workspaceReducer(
   estado: EstadoDelWorkspace,
@@ -65,6 +69,9 @@ function workspaceReducer(
     case "sesion": {
       const sesion = sessionReducer(estado.sesion, accion.evento);
       if (sesion === estado.sesion) return estado;
+      // Cuando el turno termina, el texto provisional deja lugar al definitivo.
+      if (estado.parcial && sesion.turnoEnCurso !== estado.parcial.turnId)
+        estado = { ...estado, parcial: null };
       if (accion.evento.tipo === "reiniciado") {
         return {
           ...estado,
@@ -100,6 +107,13 @@ function workspaceReducer(
       return { ...estado, accesoRequerido: accion.requerido };
     case "novedad_vista":
       return estado.novedad ? { ...estado, novedad: false } : estado;
+    case "parcial": {
+      const anterior =
+        estado.parcial?.turnId === accion.turnId ? estado.parcial.texto : "";
+      const texto =
+        accion.evento.tipo === "reinicio" ? "" : anterior + accion.evento.texto;
+      return { ...estado, parcial: { turnId: accion.turnId, texto } };
+    }
     case "espera":
       return {
         ...estado,
@@ -118,6 +132,8 @@ export type Interview = {
   /** "Nueva versión v3 · Faltan datos" para la región aria-live, o "". */
   anuncio: string;
   novedad: boolean;
+  /** El texto del agente que va llegando del turno en curso, o null. */
+  textoParcial: string | null;
   marcarNovedadVista(): void;
   /** Instante (ms) desde el que se puede reintentar ese turno, o null. */
   reintentableDesde(turnId: string): number | null;
@@ -166,6 +182,7 @@ export function InterviewProvider({
     esperas: {},
     recibida: null,
     novedad: false,
+    parcial: null,
   }));
   const { sesion, hidratada } = estado;
   const enVuelo = useRef<{ turnId: string; control: AbortController } | null>(
@@ -204,7 +221,13 @@ export function InterviewProvider({
       if (enVuelo.current?.control === control) enVuelo.current = null;
     };
 
-    enviarTurno(armarSnapshot(sesion, turnId), control.signal).then(
+    const alTexto = (e: EventoDeTexto) => {
+      // Un fragmento que llega después de cancelar el turno no se muestra.
+      if (!control.signal.aborted)
+        despachar({ tipo: "parcial", turnId, evento: e });
+    };
+
+    enviarTurno(armarSnapshot(sesion, turnId), control.signal, alTexto).then(
       (resultado) => {
         liberar();
         if (resultado.ok) {
@@ -264,6 +287,10 @@ export function InterviewProvider({
           }`
         : "",
       novedad: estado.novedad,
+      textoParcial:
+        estado.parcial && estado.parcial.turnId === sesion.turnoEnCurso
+          ? estado.parcial.texto || null
+          : null,
       marcarNovedadVista: () => despachar({ tipo: "novedad_vista" }),
       reintentableDesde: (turnId) => estado.esperas[turnId] ?? null,
       enviar(texto) {

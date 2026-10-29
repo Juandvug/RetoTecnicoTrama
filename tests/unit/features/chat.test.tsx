@@ -10,10 +10,12 @@ import { describe, expect, it, vi } from "vitest";
 
 import type { TurnoInput } from "@/contracts/interview";
 import { sesionConfirmable } from "@tests/fixtures/sesiones";
+import { unTurno } from "@tests/fixtures/turnos";
 import { unRequerimiento } from "@tests/fixtures/requerimientos";
 import { propuestaDe } from "@tests/fixtures/sesiones";
 import {
   errorHttp,
+  flujoAbierto,
   json,
   leerGuardada,
   renderWorkspace,
@@ -78,6 +80,97 @@ describe("mensajes", () => {
     await act(async () => responder());
     expect(log()).toHaveAttribute("aria-busy", "false");
     expect(screen.queryByText("Pensando…")).toBeNull();
+  });
+});
+
+describe("transmisión", () => {
+  const transmitiendo = () =>
+    document.querySelector<HTMLElement>("[data-transmitiendo]");
+
+  async function abrirTurno() {
+    const user = userEvent.setup();
+    const flujo = flujoAbierto();
+    const { llamadas } = simularFetch(() => flujo.respuesta);
+    await renderWorkspace();
+    await user.type(composer(), "Hola{Enter}");
+    const turnId = () => turnoDe(llamadas[0]!.cuerpo).turnId;
+    return { flujo, turnId };
+  }
+
+  it("muestra el texto del agente a medida que llega, en lugar de Pensando…", async () => {
+    const { flujo } = await abrirTurno();
+    expect(screen.getByText("Pensando…")).toBeInTheDocument();
+
+    await act(async () => flujo.enviar({ tipo: "texto", texto: "¿Qué " }));
+    await waitFor(() => expect(transmitiendo()).toHaveTextContent("¿Qué"));
+    expect(screen.queryByText("Pensando…")).toBeNull();
+
+    await act(async () => flujo.enviar({ tipo: "texto", texto: "decisión " }));
+    await waitFor(() =>
+      expect(transmitiendo()).toHaveTextContent("¿Qué decisión"),
+    );
+  });
+
+  it("el texto parcial no se anuncia: está oculto para los lectores y el log sigue ocupado", async () => {
+    const { flujo } = await abrirTurno();
+    await act(async () => flujo.enviar({ tipo: "texto", texto: "¿Qué " }));
+    await waitFor(() => expect(transmitiendo()).not.toBeNull());
+    expect(transmitiendo()).toHaveAttribute("aria-hidden", "true");
+    expect(log()).toHaveAttribute("aria-busy", "true");
+  });
+
+  it("un reinicio borra lo mostrado y vuelve a Pensando…", async () => {
+    const { flujo } = await abrirTurno();
+    await act(async () => flujo.enviar({ tipo: "texto", texto: "Algo " }));
+    await waitFor(() => expect(transmitiendo()).not.toBeNull());
+
+    await act(async () => flujo.enviar({ tipo: "reinicio" }));
+    await waitFor(() => expect(transmitiendo()).toBeNull());
+    expect(screen.getByText("Pensando…")).toBeInTheDocument();
+  });
+
+  it("el fin reemplaza el parcial por el mensaje definitivo, que se guarda", async () => {
+    const { flujo, turnId } = await abrirTurno();
+    await act(async () => flujo.enviar({ tipo: "texto", texto: "¿Qué " }));
+    await act(async () => {
+      flujo.enviar({
+        tipo: "fin",
+        respuesta: respuestaDeTurno(
+          { ...unTurno(), turnId: turnId() },
+          "¿Qué decisión querés tomar?",
+        ),
+      });
+      flujo.cerrar();
+    });
+
+    await within(log()).findByText("¿Qué decisión querés tomar?");
+    expect(transmitiendo()).toBeNull();
+    expect(log()).toHaveAttribute("aria-busy", "false");
+    expect(leerGuardada().mensajes.at(-1)).toMatchObject({
+      rol: "assistant",
+      contenido: "¿Qué decisión querés tomar?",
+    });
+  });
+
+  it("un error a mitad del flujo deja el mensaje como fallido y descarta el parcial", async () => {
+    const { flujo } = await abrirTurno();
+    await act(async () => flujo.enviar({ tipo: "texto", texto: "¿Qué " }));
+    await act(async () => {
+      flujo.enviar({
+        tipo: "error",
+        status: 504,
+        error: {
+          code: "LLM_TIMEOUT",
+          message: "El modelo tardó demasiado.",
+          retryable: true,
+        },
+      });
+      flujo.cerrar();
+    });
+
+    await screen.findByText("No se pudo enviar");
+    expect(transmitiendo()).toBeNull();
+    expect(screen.getByRole("button", { name: "Reintentar" })).toBeEnabled();
   });
 });
 
