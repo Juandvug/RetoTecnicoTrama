@@ -3,6 +3,7 @@ import "server-only";
 import OpenAI from "openai";
 import type {
   ChatCompletion,
+  ChatCompletionChunk,
   ChatCompletionCreateParamsNonStreaming,
   ChatCompletionMessageParam,
   ChatCompletionToolChoiceOption,
@@ -11,6 +12,7 @@ import type {
 import {
   errorDeAbort,
   LlmError,
+  type LlmCallOptions,
   type LlmClient,
   type LlmMessage,
   type LlmRequest,
@@ -92,13 +94,72 @@ function respuesta(completion: ChatCompletion): LlmResponse {
         : [],
     ),
     refusal: message.refusal ?? null,
-    finishReason: FINISH_REASONS[choice.finish_reason] ?? "other",
+    finishReason: finishReason(choice.finish_reason),
     usage: completion.usage
       ? {
           inputTokens: completion.usage.prompt_tokens,
           outputTokens: completion.usage.completion_tokens,
         }
       : null,
+  };
+}
+
+const finishReason = (razon: string | null | undefined) =>
+  (razon && FINISH_REASONS[razon]) || "other";
+
+/** Arma la respuesta completa a partir de los fragmentos de un stream. */
+async function transmitir(
+  fragmentos: AsyncIterable<ChatCompletionChunk>,
+  alTexto: (delta: string) => void,
+): Promise<LlmResponse> {
+  let texto = "";
+  let rechazo = "";
+  let razon: string | null = null;
+  let usage: LlmResponse["usage"] = null;
+  const llamadas = new Map<
+    number,
+    { id: string; name: string; arguments: string }
+  >();
+
+  for await (const fragmento of fragmentos) {
+    // Con include_usage, el último fragmento trae el uso y ningún choice.
+    if (fragmento.usage) {
+      usage = {
+        inputTokens: fragmento.usage.prompt_tokens,
+        outputTokens: fragmento.usage.completion_tokens,
+      };
+    }
+    const choice = fragmento.choices[0];
+    if (!choice) continue;
+    const { delta } = choice;
+    if (delta.content) {
+      texto += delta.content;
+      alTexto(delta.content);
+    }
+    if (delta.refusal) rechazo += delta.refusal;
+    for (const parte of delta.tool_calls ?? []) {
+      const actual = llamadas.get(parte.index) ?? {
+        id: "",
+        name: "",
+        arguments: "",
+      };
+      if (parte.id) actual.id = parte.id;
+      if (parte.function?.name) actual.name += parte.function.name;
+      if (parte.function?.arguments)
+        actual.arguments += parte.function.arguments;
+      llamadas.set(parte.index, actual);
+    }
+    if (choice.finish_reason) razon = choice.finish_reason;
+  }
+
+  return {
+    text: texto || null,
+    toolCalls: [...llamadas.entries()]
+      .sort(([a], [b]) => a - b)
+      .map(([, llamada]) => llamada),
+    refusal: rechazo || null,
+    finishReason: finishReason(razon),
+    usage,
   };
 }
 
@@ -120,6 +181,7 @@ export class OpenAiLlmClient implements LlmClient {
   async complete(
     request: LlmRequest,
     signal: AbortSignal,
+    options?: LlmCallOptions,
   ): Promise<LlmResponse> {
     if (signal.aborted) throw errorDeAbort(signal);
 
@@ -145,6 +207,14 @@ export class OpenAiLlmClient implements LlmClient {
     };
 
     try {
+      const alTexto = options?.onTextDelta;
+      if (alTexto) {
+        const flujo = await this.sdk.chat.completions.create(
+          { ...cuerpo, stream: true, stream_options: { include_usage: true } },
+          { signal },
+        );
+        return await transmitir(flujo, alTexto);
+      }
       return respuesta(
         await this.sdk.chat.completions.create(cuerpo, { signal }),
       );

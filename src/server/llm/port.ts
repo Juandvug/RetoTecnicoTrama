@@ -49,6 +49,13 @@ export interface LlmCallOptions {
    * turno. Los reintentos no esperan más allá de él.
    */
   deadline?: number;
+  /**
+   * Si está, el adaptador transmite el texto de la respuesta a medida que
+   * llega. La respuesta completa se devuelve igual al terminar.
+   */
+  onTextDelta?: (delta: string) => void;
+  /** Lo transmitido hasta ahora se descarta: empieza otro intento. */
+  onTextReset?: () => void;
 }
 
 export interface LlmClient {
