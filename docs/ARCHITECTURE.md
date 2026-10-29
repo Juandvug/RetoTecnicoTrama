@@ -518,7 +518,7 @@ export const ErrorResponseSchema = z.strictObject({
 ```
 
 - La ventana de `mensajes` la arma el cliente (`armarVentana`): siempre conserva el primer mensaje del usuario (el planteo original) y el último, y agrega los más recientes hasta el máximo de 40 o hasta agotar el presupuesto de bytes, lo que ocurra primero. El presupuesto son los 64 KB del endpoint menos lo que pesa el requerimiento vigente (ADR-0003).
-- El cliente también valida la respuesta con `TurnoResponseSchema` antes de tocar el estado.
+- La respuesta de un turno es NDJSON (`application/x-ndjson`): eventos `texto`, `reinicio`, `fin` y `error`, validados con `EventoDeTurnoSchema` (ADR-0003). El evento `fin` lleva el `TurnoResponseSchema` de arriba, y es lo único que cambia el estado. Los rechazos previos al turno siguen siendo JSON con su status.
 
 ### 7.2 `POST /api/access`
 
@@ -539,8 +539,11 @@ export const ErrorResponseSchema = z.strictObject({
 6. analizarRequerimiento(vigente, corpus, { verificarCifras: false });
    si hay errores ...................................... 400 INVALID_REQUEST
 7. runTurn(input, deps, AbortSignal.any([req.signal, plazo]))
-8. Registrar el turno en el log y responder 200 con Cache-Control: no-store
-   Si hay error: LlmError o plazo vencido → mapError → 502 / 503 / 504
+8. Responder 200 en NDJSON con Cache-Control: no-store, no-transform: el texto
+   a medida que llega (con la guarda de cifras) y al final el evento fin;
+   registrar el turno en el log
+   Si hay error: LlmError o plazo vencido → mapError → evento error con
+   status 502 / 503 / 504
 ```
 
 El rate limit se consume antes de leer el body, así que una request malformada también cuenta para el límite.
@@ -662,7 +665,7 @@ Además, siempre hay una etiqueta de texto visible.
 | Versión anterior (solo lectura) | `border border-dashed bg-muted` | "vN · reemplazada por vM" |
 | Regla sin cobertura | ítem con borde punteado | "Sin datos para: …" |
 | Elemento nuevo respecto de la versión anterior | `font-semibold` con un marcador de texto | "nuevo" |
-| Turno en curso | `aria-busy` en el chat; el panel no cambia | "Pensando…" |
+| Turno en curso | `aria-busy` en el chat; el panel no cambia | "Pensando…" hasta que llega el primer fragmento; después, el texto a medida que se escribe, oculto para los lectores de pantalla hasta el mensaje final |
 
 **Contraste.** `text-muted-foreground` sobre `bg-muted` da 4,34:1 en el tema claro (oklch 0,556 sobre 0,97), por debajo del 4,5:1 de WCAG AA; sobre `bg-foreground/5` da todavía menos. Por eso, sobre esos dos fondos el texto va en `text-foreground`, y lo apagado se reserva para `bg-background`, `bg-card` y `bg-sidebar` (4,53:1 o más). Por la misma razón, la etiqueta "Agente" o "Vos" va encima de la burbuja, sobre el fondo de la columna, y no adentro.
 
@@ -864,7 +867,7 @@ El log nunca incluye el contenido de los mensajes, el requerimiento, cabeceras n
 | Riesgo | Mitigación |
 |---|---|
 | La calidad conversacional depende del modelo que habilite la key | Modelo configurable, evaluaciones manuales en tres dominios y umbrales de fase ajustables |
-| Los turnos que proponen tardan (dos llamadas o más) | Estado "Pensando…" explícito. El streaming de texto queda como incremento sin cambiar el modelo de eventos (ADR-0003). |
+| Los turnos que proponen tardan (dos llamadas o más) | El texto se transmite a medida que llega (ADR-0003). La generación de la tool call no se puede transmitir, porque es JSON que todavía no está validado: durante esa parte se ve "Pensando…". |
 | La guarda de cifras es heurística: puede dar falsos positivos o dejar pasar cifras | Solo bloquea porcentajes y montos. El resto queda como advertencia y se revisa en las evaluaciones. |
 | El JSON del requerimiento puede acercarse al tope de tokens, sobre todo con modelos de razonamiento | Topes por lista (E5). Una respuesta truncada se trata como inválida y se pide una versión más compacta. |
 | La key de prueba tiene solo 5 USD y 7 días de vigencia | Código de acceso, rate limit por sesión, IP y global, y `maxOutputTokens`. Se calibra con los límites del modelo elegido. |

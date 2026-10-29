@@ -88,7 +88,7 @@ La key de OpenAI va solo en `.env.local` y en las variables de entorno de Vercel
 | Contrato extendido (justificación por columna, `usa` en las reglas, `null` para lo desconocido), con conversión a la forma base | Contrato base sin cambios | La forma base no permite verificar que cada columna esté justificada ni que cada regla tenga sus datos. | [0006](docs/adr/0006-extensiones-del-contrato.md) |
 | La fase se deriva del estado y el LLM decide dentro de cada fase | Que el modelo elija la fase, o una máquina de slots con una segunda tool | Es reproducible y testeable. La propuesta forzada en el tercer mensaje evita entrevistas interminables. | [0007](docs/adr/0007-control-de-fases.md) |
 | Sesión en el navegador y servidor sin estado; el requerimiento vigente viaja como contexto | Sesión en Redis, o reenviar el historial de tool calls | El servidor no guarda datos del usuario y el historial no depende del proveedor. | [0003](docs/adr/0003-estado-y-flujo-de-datos.md) |
-| Route Handler con respuesta JSON, sin streaming en v1 | Server Actions, o streaming desde el principio | La propuesta solo se muestra después de validarse. Si una reparación falla, habría que retractar texto ya transmitido. | [0003](docs/adr/0003-estado-y-flujo-de-datos.md) |
+| Route Handler que transmite el turno en NDJSON | Server Actions, una respuesta JSON única, o Server-Sent Events | El texto aparece a medida que el modelo lo escribe, y la propuesta solo se muestra validada, en el evento final. Las cifras no aportadas se retienen y nunca se transmiten. | [0003](docs/adr/0003-estado-y-flujo-de-datos.md) |
 | Código de acceso y rate limiting en Redis por sesión, IP y global | Solo rate limiting, o límites en memoria | Es la forma de proteger de verdad el tope de gasto de la key en un entorno serverless. | [0005](docs/adr/0005-proteccion-contra-abuso.md) |
 | Tests sin red, con un fake programable y una suite de contrato para el puerto | MSW, grabaciones tipo VCR o evaluaciones en la CI | Son deterministas y rápidos, y la CI no necesita la key. | [0008](docs/adr/0008-estrategia-de-tests.md) |
 
@@ -110,7 +110,7 @@ Todo esto queda fuera del alcance del reto. Es lo que haría a continuación:
 - **La guarda de cifras es heurística.** Bloquea porcentajes y montos que el usuario no aportó, pero no detecta cifras escritas con palabras. La complementan la regla del prompt y las evaluaciones.
 - **Los umbrales de fase son heurísticos.** Los valores actuales (3 mensajes y 3 turnos) se calibran con las evaluaciones.
 - **La sesión vive en el navegador,** así que no hay continuidad entre dispositivos.
-- **Los turnos que proponen tardan más.** Hacen al menos dos llamadas al modelo y, sin streaming, la espera se nota.
+- **Los turnos que proponen tardan más.** Hacen al menos dos llamadas al modelo. El texto se transmite, pero la tool call con el requerimiento no se puede transmitir (es JSON que todavía no está validado), y durante esa parte se ve "Pensando…".
 
 **Dónde la entrevista todavía falla:** *pendiente (F9 y F11).* Se completa con lo que muestren las evaluaciones y las transcripciones.
 

@@ -365,7 +365,7 @@ flowchart LR
 
 ## F12 · Opcionales, en orden de valor
 
-1. Streaming del texto del agente en NDJSON, sobre el mismo modelo de eventos (ADR-0003).
+1. ~~Streaming del texto del agente en NDJSON, sobre el mismo modelo de eventos (ADR-0003).~~ Hecho: lo pidió el usuario durante F9.
 2. Un diff visual más detallado entre versiones.
 3. Un presupuesto global diario medido en tokens, además de en turnos.
 4. Vercel BotID o reglas del WAF como refuerzo.

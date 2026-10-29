@@ -29,8 +29,13 @@ export interface LlmClient {
 
 // Lo que no es parte del pedido al modelo. `deadline` es el instante en que
 // vence el plazo del turno: los reintentos no esperan más allá de él.
+// Con `onTextDelta`, el adaptador transmite el texto a medida que llega y
+// devuelve igual la respuesta completa; `onTextReset` avisa que empieza otro
+// intento y lo transmitido se descarta.
 export interface LlmCallOptions {
   deadline?: number;
+  onTextDelta?: (delta: string) => void;
+  onTextReset?: () => void;
 }
 
 export type LlmMessage =
@@ -97,6 +102,7 @@ Vive en `src/server/llm/openai/` y es el único módulo que importa `openai`. Tr
 - `system` se envía como mensaje `system`. `context` va como un segundo mensaje `system` inmediatamente después, para que el prefijo estático aproveche el prompt caching del proveedor.
 - Las tools se declaran con `strict: true` y `parallel_tool_calls: false`. El adaptador lleva el JSON Schema al subconjunto que acepta el modo estricto: todos los campos en `required`, `additionalProperties: false` y sin las palabras clave que el modo estricto no soporta. Las restricciones que se quitan las sigue aplicando Zod en el dominio.
 - `toolChoice: { name }` se traduce al `tool_choice` que fuerza esa función.
+- Con `onTextDelta`, la llamada va con `stream: true` y `stream_options: { include_usage: true }`. El adaptador entrega cada fragmento de texto, junta los argumentos de las tool calls (que llegan repartidos) y el rechazo, y devuelve la misma `LlmResponse` que sin streaming.
 - Los errores del SDK se convierten a `LlmError`:
   - Un `429` con `insufficient_quota` pasa a `quota_exceeded`, que no se reintenta porque significa que se llegó al tope de gasto.
   - Cualquier otro `429` pasa a `rate_limited`, con el valor de `retry-after`.
@@ -109,7 +115,7 @@ Vive en `src/server/llm/openai/` y es el único módulo que importa `openai`. Tr
 
 Implementan el mismo puerto y se componen en la fábrica:
 
-- `withRetry`: backoff exponencial con jitter (entre el 50 % y el 100 % de `500 ms × 2^n`), como máximo 2 reintentos, solo para `timeout`, `rate_limited` y `unavailable`. Respeta `retryAfterMs` y no espera más allá de `options.deadline`. Aplica a cada intento un plazo propio de 25 s, de modo que un intento colgado se cancela y se reintenta dentro del plazo del turno. Se detiene de inmediato si el usuario cancela.
+- `withRetry`: backoff exponencial con jitter (entre el 50 % y el 100 % de `500 ms × 2^n`), como máximo 2 reintentos, solo para `timeout`, `rate_limited` y `unavailable`. Respeta `retryAfterMs` y no espera más allá de `options.deadline`. Aplica a cada intento un plazo propio de 25 s, de modo que un intento colgado se cancela y se reintenta dentro del plazo del turno. Se detiene de inmediato si el usuario cancela. Antes de cada reintento llama a `onTextReset`, para que no quede a la vista el texto de un intento fallido.
 - `withTelemetry`: registra latencia, tokens y tipo de error, nunca contenido.
 
 La señal de cada intento distingue un plazo vencido de una cancelación del usuario por el motivo del abort (`TimeoutError`): el primero es `timeout` y se reintenta; el segundo es `aborted` y no.
