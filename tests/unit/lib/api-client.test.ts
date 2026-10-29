@@ -156,3 +156,115 @@ describe("enviarCodigo", () => {
     });
   });
 });
+
+describe("enviarTurno · flujo NDJSON", () => {
+  const ndjson = (...lineas: Array<unknown | string>) =>
+    new Response(
+      lineas
+        .map((l) => (typeof l === "string" ? l : JSON.stringify(l)) + "\n")
+        .join(""),
+      {
+        status: 200,
+        headers: { "Content-Type": "application/x-ndjson; charset=utf-8" },
+      },
+    );
+
+  it("entrega el texto parcial y devuelve el fin", async () => {
+    simular(() =>
+      ndjson(
+        { tipo: "texto", texto: "¿Desde " },
+        { tipo: "reinicio" },
+        { tipo: "texto", texto: "¿Desde cuándo?" },
+        { tipo: "fin", respuesta: respuestaValida() },
+      ),
+    );
+    const eventos: unknown[] = [];
+    const resultado = await enviarTurno(unTurno(), undefined, (e) =>
+      eventos.push(e),
+    );
+
+    expect(eventos).toEqual([
+      { tipo: "texto", texto: "¿Desde " },
+      { tipo: "reinicio" },
+      { tipo: "texto", texto: "¿Desde cuándo?" },
+    ]);
+    expect(resultado).toEqual({ ok: true, datos: respuestaValida() });
+  });
+
+  it("une las líneas que llegan partidas entre lecturas", async () => {
+    const linea = JSON.stringify({ tipo: "fin", respuesta: respuestaValida() });
+    const codificador = new TextEncoder();
+    const cuerpo = new ReadableStream<Uint8Array>({
+      start(c) {
+        c.enqueue(codificador.encode(linea.slice(0, 20)));
+        c.enqueue(codificador.encode(linea.slice(20) + "\n"));
+        c.close();
+      },
+    });
+    simular(
+      () =>
+        new Response(cuerpo, {
+          headers: { "Content-Type": "application/x-ndjson" },
+        }),
+    );
+    expect(await enviarTurno(unTurno())).toEqual({
+      ok: true,
+      datos: respuestaValida(),
+    });
+  });
+
+  it("un evento de error se normaliza con su status y su espera", async () => {
+    simular(() =>
+      ndjson({
+        tipo: "error",
+        status: 503,
+        error: {
+          code: "LLM_UNAVAILABLE",
+          message: "No disponible.",
+          retryable: true,
+          retryAfterSec: 8,
+        },
+      }),
+    );
+    expect(await enviarTurno(unTurno())).toEqual({
+      ok: false,
+      error: {
+        code: "LLM_UNAVAILABLE",
+        message: "No disponible.",
+        retryable: true,
+        retryAfterSec: 8,
+        status: 503,
+      },
+    });
+  });
+
+  it("un flujo que se corta sin fin es un error reintentable", async () => {
+    simular(() => ndjson({ tipo: "texto", texto: "¿Desde " }));
+    const r = await enviarTurno(unTurno());
+    expect(r).toMatchObject({
+      ok: false,
+      error: { code: "NETWORK", retryable: true },
+    });
+  });
+
+  it("una línea que no es un evento válido es BAD_RESPONSE", async () => {
+    simular(() => ndjson("{no es json"));
+    expect(await enviarTurno(unTurno())).toMatchObject({
+      ok: false,
+      error: { code: "BAD_RESPONSE" },
+    });
+  });
+
+  it("descarta un fin de otro turno", async () => {
+    simular(() =>
+      ndjson({
+        tipo: "fin",
+        respuesta: respuestaValida("00000000-0000-4000-8000-000000000000"),
+      }),
+    );
+    expect(await enviarTurno(unTurno())).toMatchObject({
+      ok: false,
+      error: { code: "BAD_RESPONSE" },
+    });
+  });
+});

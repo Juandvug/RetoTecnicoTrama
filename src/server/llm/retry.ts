@@ -48,6 +48,8 @@ export function withRetry(
       for (let intento = 0; ; intento++) {
         if (signal.aborted) throw errorDeAbort(signal);
 
+        // Un intento nuevo transmite desde cero: lo del anterior se descarta.
+        if (intento > 0) options?.onTextReset?.();
         const deIntento = conPlazo(signal, plazoPorIntentoMs);
         let error: unknown;
         try {

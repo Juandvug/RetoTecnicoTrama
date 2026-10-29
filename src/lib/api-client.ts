@@ -3,7 +3,10 @@ import type { z } from "zod";
 import { AccesoRequestSchema } from "@/contracts/access";
 import {
   ErrorResponseSchema,
+  EventoDeTurnoSchema,
+  TIPO_NDJSON,
   TurnoResponseSchema,
+  type EventoDeTexto,
   type TurnoInput,
   type TurnoResponse,
 } from "@/contracts/interview";
@@ -38,6 +41,13 @@ const respuestaInesperada = (status: number): ErrorDeApi => ({
   retryable: true,
   status,
 });
+
+const CORTADA: ErrorDeApi = {
+  code: "NETWORK",
+  message: "La respuesta se cortó antes de terminar. Volvé a intentar.",
+  retryable: true,
+  status: null,
+};
 
 async function leerJson(respuesta: Response): Promise<unknown> {
   try {
@@ -84,16 +94,77 @@ async function validar<S extends z.ZodType>(
     : { ok: false, error: respuestaInesperada(respuesta.status) };
 }
 
-/** POST /api/interview. Si `signal` se cancela, la promesa se rechaza con AbortError. */
+/** Las líneas de un cuerpo NDJSON, a medida que llegan. */
+async function* lineas(cuerpo: ReadableStream<Uint8Array>) {
+  const lector = cuerpo.getReader();
+  const decodificador = new TextDecoder();
+  let pendiente = "";
+  for (;;) {
+    const { done, value } = await lector.read();
+    if (done) break;
+    pendiente += decodificador.decode(value, { stream: true });
+    const partes = pendiente.split("\n");
+    pendiente = partes.pop() ?? "";
+    for (const linea of partes) if (linea.trim()) yield linea;
+  }
+  pendiente += decodificador.decode();
+  if (pendiente.trim()) yield pendiente;
+}
+
+/**
+ * Lee los eventos del turno (ADR-0003): el texto parcial va a `alTexto` y el
+ * resultado sale del evento `fin`, o del evento `error`.
+ */
+async function leerFlujo(
+  respuesta: Response,
+  alTexto: (evento: EventoDeTexto) => void,
+  signal?: AbortSignal,
+): Promise<Resultado<TurnoResponse>> {
+  if (!respuesta.body) return { ok: false, error: CORTADA };
+  try {
+    for await (const linea of lineas(respuesta.body)) {
+      let datos: unknown;
+      try {
+        datos = JSON.parse(linea);
+      } catch {
+        return { ok: false, error: respuestaInesperada(respuesta.status) };
+      }
+      const evento = EventoDeTurnoSchema.safeParse(datos);
+      if (!evento.success)
+        return { ok: false, error: respuestaInesperada(respuesta.status) };
+      const e = evento.data;
+      if (e.tipo === "fin") return { ok: true, datos: e.respuesta };
+      if (e.tipo === "error")
+        return { ok: false, error: { ...e.error, status: e.status } };
+      alTexto(e);
+    }
+  } catch (error) {
+    if (signal?.aborted) throw error;
+    return { ok: false, error: CORTADA };
+  }
+  return { ok: false, error: CORTADA };
+}
+
+/**
+ * POST /api/interview. La respuesta llega en NDJSON: el texto parcial se
+ * entrega a `alTexto` a medida que llega. Si `signal` se cancela, la promesa
+ * se rechaza con AbortError.
+ */
 export async function enviarTurno(
   input: TurnoInput,
   signal?: AbortSignal,
+  alTexto: (evento: EventoDeTexto) => void = () => {},
 ): Promise<Resultado<TurnoResponse>> {
   const respuesta = await post("/api/interview", input, signal);
   if (!respuesta) return { ok: false, error: SIN_CONEXION };
   if (!respuesta.ok) return { ok: false, error: await errorDe(respuesta) };
 
-  const resultado = await validar(respuesta, TurnoResponseSchema);
+  const esFlujo = respuesta.headers
+    .get("content-type")
+    ?.startsWith(TIPO_NDJSON);
+  const resultado = esFlujo
+    ? await leerFlujo(respuesta, alTexto, signal)
+    : await validar(respuesta, TurnoResponseSchema);
   if (resultado.ok && resultado.datos.turnId !== input.turnId) {
     return { ok: false, error: respuestaInesperada(respuesta.status) };
   }

@@ -1,7 +1,11 @@
 import { render, screen } from "@testing-library/react";
 import { vi } from "vitest";
 
-import type { TurnoInput, TurnoResponse } from "@/contracts/interview";
+import type {
+  EventoDeTurno,
+  TurnoInput,
+  TurnoResponse,
+} from "@/contracts/interview";
 import { CLAVE_STORAGE, type Propuesta, type Sesion } from "@/domain/session";
 import { InterviewWorkspace } from "@/features/workspace/interview-workspace";
 
@@ -30,6 +34,46 @@ export const json = (cuerpo: unknown, status = 200, cabeceras = {}) =>
     status,
     headers: { "Content-Type": "application/json", ...cabeceras },
   });
+
+/**
+ * Una respuesta NDJSON abierta: el test empuja los eventos de a uno, como los
+ * transmitiría el servidor, y la cierra cuando quiere.
+ */
+export function flujoAbierto() {
+  const codificador = new TextEncoder();
+  let controlador!: ReadableStreamDefaultController<Uint8Array>;
+  const cuerpo = new ReadableStream<Uint8Array>({
+    start: (c) => {
+      controlador = c;
+    },
+  });
+  return {
+    respuesta: new Response(cuerpo, {
+      status: 200,
+      headers: { "Content-Type": "application/x-ndjson; charset=utf-8" },
+    }),
+    enviar: (evento: EventoDeTurno) =>
+      controlador.enqueue(codificador.encode(`${JSON.stringify(evento)}\n`)),
+    cerrar: () => controlador.close(),
+  };
+}
+
+/** La respuesta completa de un turno en NDJSON: fragmentos y fin. */
+export const flujoCompleto = (respuesta: TurnoResponse) =>
+  new Response(
+    [
+      ...respuesta.mensaje
+        .split(/(?<=\s)/)
+        .map((texto) => ({ tipo: "texto", texto })),
+      { tipo: "fin", respuesta },
+    ]
+      .map((e) => `${JSON.stringify(e)}\n`)
+      .join(""),
+    {
+      status: 200,
+      headers: { "Content-Type": "application/x-ndjson; charset=utf-8" },
+    },
+  );
 
 export function respuestaDeTurno(
   input: TurnoInput,

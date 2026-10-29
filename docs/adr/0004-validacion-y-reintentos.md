@@ -81,6 +81,10 @@ Los aplica el decorador `withRetry` sobre el puerto.
 
 El cuerpo de error es `{ error: { code, message, retryable, retryAfterSec? } }`, con el mensaje en español y sin detalles internos. Que el modelo se niegue a responder (`refusal`) no es un error HTTP: el turno responde 200 con un mensaje neutro y sin propuesta.
 
+Los errores del modelo ocurren con el turno ya transmitiéndose (ADR-0003): llegan como un evento `error` con el mismo `code`, `retryable`, `retryAfterSec` y el status de esta tabla, y el cliente los trata igual que un error HTTP.
+
+**La guarda de cifras durante la transmisión.** El texto se transmite a medida que llega, pero cada número se retiene hasta ver los 20 caracteres que lo siguen, que es donde `detectarCifras` busca "%", "por ciento" o una moneda. Si aparece un porcentaje o un monto que el usuario no aportó, la transmisión de esa llamada se corta, y el texto corregido (o el de respaldo) llega en `fin`. Así una cifra no aportada nunca se muestra, ni siquiera por un instante. La corrección no se transmite: reemplaza el texto entero.
+
 ### No perder el mensaje del usuario
 
 1. El mensaje se agrega al estado y a `localStorage` antes de enviarse, en estado `enviando`.

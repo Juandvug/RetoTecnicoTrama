@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { TurnoResponseSchema } from "@/contracts/interview";
+import {
+  EventoDeTurnoSchema,
+  TurnoResponseSchema,
+  type EventoDeTurno,
+} from "@/contracts/interview";
 import { manejarTurno } from "@/server/http/interview-handler";
 import { falla, texto, type PasoFake } from "@/server/llm/fake/client";
 import { DURACION_SESION_MS } from "@/server/security/session-cookie";
@@ -31,17 +35,41 @@ function armar(
 const error = async (r: Response) =>
   ((await r.json()) as { error: Record<string, unknown> }).error;
 
+/** Los eventos NDJSON de un turno, validados contra el contrato. */
+const eventos = async (r: Response): Promise<EventoDeTurno[]> =>
+  (await r.text())
+    .split("\n")
+    .filter(Boolean)
+    .map((linea) => EventoDeTurnoSchema.parse(JSON.parse(linea)));
+
+const fin = async (r: Response) => {
+  const ultimo = (await eventos(r)).at(-1);
+  if (ultimo?.tipo !== "fin") throw new Error(`Esperaba fin: ${ultimo?.tipo}`);
+  return ultimo.respuesta;
+};
+
+const errorDelFlujo = async (r: Response) => {
+  const ultimo = (await eventos(r)).at(-1);
+  if (ultimo?.tipo !== "error")
+    throw new Error(`Esperaba error: ${ultimo?.tipo}`);
+  return ultimo;
+};
+
 describe("POST /api/interview: camino feliz con el fake", () => {
-  it("responde 200 con el mensaje, sin caché y con los límites restantes", async () => {
+  it("responde 200 en NDJSON, sin caché y con los límites restantes", async () => {
     const { enviar } = armar();
     const respuesta = await enviar();
 
     expect(respuesta.status).toBe(200);
-    expect(respuesta.headers.get("cache-control")).toBe("no-store");
-    expect(respuesta.headers.get("content-type")).toContain("application/json");
+    expect(respuesta.headers.get("cache-control")).toBe(
+      "no-store, no-transform",
+    );
+    expect(respuesta.headers.get("content-type")).toContain(
+      "application/x-ndjson",
+    );
     expect(respuesta.headers.get("x-ratelimit-remaining")).toBe("49");
 
-    const cuerpo = await respuesta.json();
+    const cuerpo = await fin(respuesta);
     expect(TurnoResponseSchema.safeParse(cuerpo).success).toBe(true);
     expect(cuerpo).toMatchObject({
       turnId: unTurno().turnId,
@@ -56,9 +84,9 @@ describe("POST /api/interview: camino feliz con el fake", () => {
       registrar(unRequerimiento()),
       texto("Te dejé una propuesta."),
     ]);
-    const cuerpo = await (await enviar()).json();
-    expect(cuerpo.propuesta.requerimiento).toEqual(unRequerimiento());
-    expect(cuerpo.propuesta.analisis.completitudEfectiva).toBe(
+    const cuerpo = await fin(await enviar());
+    expect(cuerpo.propuesta?.requerimiento).toEqual(unRequerimiento());
+    expect(cuerpo.propuesta?.analisis.completitudEfectiva).toBe(
       "suficiente_para_confirmar",
     );
   });
@@ -68,7 +96,8 @@ describe("POST /api/interview: camino feliz con el fake", () => {
       registrar(unRequerimiento()),
       texto("Te dejé una propuesta."),
     ]);
-    await enviar();
+    // El log del turno se escribe cuando termina el flujo.
+    await (await enviar()).text();
     const turno = logs
       .map((l) => JSON.parse(l))
       .find((l) => l.evento === "turno");
@@ -286,9 +315,12 @@ describe("POST /api/interview: errores del modelo", () => {
   ] as const)("%s → %i %s", async (kind, status, code, retryable) => {
     const { enviar, logs } = armar([falla(kind)]);
     const r = await enviar();
-    expect(r.status).toBe(status);
-    expect(r.headers.get("cache-control")).toBe("no-store");
-    expect(await error(r)).toMatchObject({ code, retryable });
+    // El flujo ya empezó: el error llega como evento, con su status.
+    expect(r.status).toBe(200);
+    expect(await errorDelFlujo(r)).toMatchObject({
+      status,
+      error: { code, retryable },
+    });
     expect(logs.map((l) => JSON.parse(l))).toContainEqual(
       expect.objectContaining({
         nivel: "error",
@@ -302,17 +334,70 @@ describe("POST /api/interview: errores del modelo", () => {
 
   it("propaga el Retry-After del proveedor", async () => {
     const r = await armar([falla("rate_limited", 7500)]).enviar();
-    expect(r.headers.get("retry-after")).toBe("8");
-    expect(await error(r)).toMatchObject({ retryAfterSec: 8 });
+    expect(await errorDelFlujo(r)).toMatchObject({
+      error: { retryAfterSec: 8 },
+    });
   });
 
   it("un error inesperado responde 500 genérico", async () => {
     const r = await armar([]).enviar(); // el guion vacío lanza un Error común
-    expect(r.status).toBe(500);
-    expect(await error(r)).toEqual({
+    const evento = await errorDelFlujo(r);
+    expect(evento.status).toBe(500);
+    expect(evento.error).toEqual({
       code: "INTERNAL",
       message: "Ocurrió un error inesperado. Probá de nuevo más tarde.",
       retryable: false,
+    });
+  });
+});
+
+describe("POST /api/interview: transmisión del texto", () => {
+  it("transmite el texto en fragmentos y cierra con la respuesta completa", async () => {
+    const { enviar } = armar([texto("¿Qué decisión querés tomar con esto?")]);
+    const lista = await eventos(await enviar());
+
+    const fragmentos = lista.filter((e) => e.tipo === "texto");
+    expect(fragmentos.length).toBeGreaterThan(1);
+    expect(fragmentos.map((e) => e.texto).join("")).toBe(
+      "¿Qué decisión querés tomar con esto?",
+    );
+    expect(lista.at(-1)).toMatchObject({
+      tipo: "fin",
+      respuesta: { mensaje: "¿Qué decisión querés tomar con esto?" },
+    });
+  });
+
+  it("no transmite el JSON de la tool call: solo el texto que la acompaña después", async () => {
+    const { enviar } = armar([
+      registrar(unRequerimiento()),
+      texto("Te dejé una propuesta."),
+    ]);
+    const lista = await eventos(await enviar());
+    const transmitido = lista
+      .filter((e) => e.tipo === "texto")
+      .map((e) => e.texto)
+      .join("");
+    expect(transmitido).toBe("Te dejé una propuesta.");
+  });
+
+  it("nunca transmite una cifra no aportada: corta y el fin trae el texto corregido", async () => {
+    const { enviar } = armar([
+      texto("Los reclamos podrían bajar un 30 % si reforzás el chat."),
+      texto("Los reclamos podrían bajar si reforzás el chat."),
+    ]);
+    const lista = await eventos(await enviar());
+    const transmitido = lista
+      .filter((e) => e.tipo === "texto")
+      .map((e) => e.texto)
+      .join("");
+
+    expect(transmitido).not.toMatch(/30/);
+    expect(lista.at(-1)).toMatchObject({
+      tipo: "fin",
+      respuesta: {
+        mensaje: "Los reclamos podrían bajar si reforzás el chat.",
+        meta: { guardaCifras: "corregido" },
+      },
     });
   });
 });
@@ -329,7 +414,6 @@ describe("la key no se filtra", () => {
       turno,
     );
 
-    expect(r.status).toBe(500);
     expect(await r.text()).not.toContain(CENTINELA);
     expect(logs.join("\n")).not.toContain(CENTINELA);
   });

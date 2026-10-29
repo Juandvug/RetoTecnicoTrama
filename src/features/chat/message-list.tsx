@@ -12,17 +12,18 @@ export const SALUDO =
 /**
  * La transcripción. role="log" con aria-live="polite" anuncia las respuestas
  * nuevas; aria-busy las retiene mientras el agente está pensando, para que se
- * lea la respuesta completa y no el indicador.
+ * lea la respuesta completa y no el indicador. El texto que se va
+ * transmitiendo se muestra pero no se anuncia: se lee una vez, completo.
  */
 export function MessageList() {
-  const { sesion } = useInterview();
+  const { sesion, textoParcial } = useInterview();
   const contenedor = useRef<HTMLDivElement>(null);
   const pensando = sesion.turnoEnCurso !== null;
 
   useEffect(() => {
     const el = contenedor.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [sesion.mensajes.length, pensando]);
+  }, [sesion.mensajes.length, pensando, textoParcial]);
 
   return (
     <div
@@ -40,7 +41,12 @@ export function MessageList() {
       {sesion.mensajes.map((m) => (
         <Message key={m.id} mensaje={m} />
       ))}
-      {pensando && (
+      {pensando && textoParcial && (
+        <div aria-hidden="true" data-transmitiendo="">
+          <Burbuja rol="assistant">{textoParcial}</Burbuja>
+        </div>
+      )}
+      {pensando && !textoParcial && (
         <p className="text-xs font-medium text-muted-foreground">Pensando…</p>
       )}
     </div>
