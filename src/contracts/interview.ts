@@ -88,7 +88,32 @@ export const ErrorResponseSchema = z.strictObject({
   }),
 });
 
+/**
+ * POST /api/interview responde en NDJSON, un evento por línea (ADR-0003). El
+ * texto llega en fragmentos; `reinicio` descarta lo mostrado (un reintento o
+ * un texto que se reemplaza), y `fin` trae la respuesta completa y validada,
+ * que es la única que cambia la sesión. Un error después de empezar a
+ * transmitir llega como evento, con el status que habría tenido.
+ */
+export const EventoDeTurnoSchema = z.discriminatedUnion("tipo", [
+  z.strictObject({ tipo: z.literal("texto"), texto: z.string() }),
+  z.strictObject({ tipo: z.literal("reinicio") }),
+  z.strictObject({ tipo: z.literal("fin"), respuesta: TurnoResponseSchema }),
+  z.strictObject({
+    tipo: z.literal("error"),
+    status: z.int(),
+    error: ErrorResponseSchema.shape.error,
+  }),
+]);
+
+export const TIPO_NDJSON = "application/x-ndjson";
+
 export type TurnoInput = z.infer<typeof TurnoRequestSchema>;
 export type TurnoResponse = z.infer<typeof TurnoResponseSchema>;
 export type ErrorResponse = z.infer<typeof ErrorResponseSchema>;
+export type EventoDeTurno = z.infer<typeof EventoDeTurnoSchema>;
+export type EventoDeTexto = Extract<
+  EventoDeTurno,
+  { tipo: "texto" | "reinicio" }
+>;
 export type CodigoDeError = (typeof CODIGOS_DE_ERROR)[number];
